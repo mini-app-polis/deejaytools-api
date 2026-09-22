@@ -16,7 +16,7 @@ app keeps its own copy; both must change together when the contract does.
 | Database | PostgreSQL via Drizzle ORM |
 | Auth | Clerk session JWTs (verified against JWKS) |
 | Observability | Sentry (errors), common-typescript-utils logger (structured logs) |
-| Deployment | Railway (NIXPACKS, `railway.toml`; `startCommand` runs `pnpm db:migrate && pnpm start`) |
+| Deployment | Railway (NIXPACKS, `railway.json`; `startCommand` runs `pnpm db:migrate && pnpm start`) |
 
 Auth verifies Clerk session JWTs only. Machine callers are deferred —
 see [ADR-003](./docs/decisions/ADR-003-jwt-only-clerk-verification.md) for
@@ -146,7 +146,7 @@ Managed by Drizzle ORM. Migration files live under `drizzle/`.
 - `pnpm db:migrate` — apply pending migrations.
 - `pnpm db:studio` — browse the live database.
 
-Migrations run at deploy time via Railway's `startCommand` in `railway.toml`
+Migrations run at deploy time via Railway's `startCommand` in `railway.json`
 (`db:migrate` before `start`), not in CI.
 
 ## Tests

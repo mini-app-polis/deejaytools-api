@@ -17,54 +17,50 @@ How the deejaytools API is built, released, and run in production on **Railway**
 
 ## Railway
 
-Configuration lives at the repo root in `railway.toml`.
+Configuration lives at the repo root in `railway.json` — the location CD-017 checks (restart policy, start command and limits are version-controlled, not dashboard-owned).
 
-### `railway.toml` (full file)
+### `railway.json` (full file)
 
-```toml
-# Railway deployment config for deejaytools-api.
-# The web app lives in the deejaytools-com repo and deploys separately
-# to Cloudflare Pages.
-#
-# Build and migration tooling (typescript, drizzle-kit) lives in
-# `dependencies` rather than devDependencies so that it
-# installs unconditionally under Railway's default NODE_ENV=production,
-# which causes pnpm to skip devDependencies. tsx/vitest/xlsx/@types/*
-# remain devDependencies — they are only needed for local dev and
-# tests, neither of which run on Railway.
-
-[build]
-builder = "NIXPACKS"
-buildCommand = "pnpm build"
-
-[deploy]
-# Run pending Drizzle migrations before the service starts (ADR-001).
-startCommand = "pnpm db:migrate && pnpm start"
-healthcheckPath = "/health"
-healthcheckTimeout = 30
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
-
-# CD-024. Placeholder ceilings, well above what this service uses, so the
-# bound exists and is version-controlled without risking an OOM kill on a
-# workload nobody has measured. Bring them down to real usage plus
-# headroom once Railway's metrics have been read.
-[deploy.limitOverride.containers]
-cpu = 4
-memoryBytes = 4294967296
+```json
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "pnpm build"
+  },
+  "deploy": {
+    "startCommand": "pnpm db:migrate && pnpm start",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 30,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10,
+    "limitOverride": {
+      "containers": {
+        "cpu": 4,
+        "memoryBytes": 4294967296
+      }
+    }
+  }
+}
 ```
+
+Notes the JSON can't carry as comments:
+
+- **Migrations before start (ADR-001)** — `startCommand` runs `db:migrate` before `start`; see below.
+- **Limits (CD-024)** — `limitOverride` values are placeholder ceilings, well above what this service uses, so the bound exists without risking an OOM kill on an unmeasured workload. Bring them down to real usage plus headroom once Railway's metrics have been read.
+- **Build tooling in `dependencies`** — see "Packaging quirk" below.
 
 ### Key-by-key
 
 | Key | Meaning |
 |-----|---------|
-| `[build].builder = "NIXPACKS"` | Railway auto-detects Node/pnpm and runs the build in a Nixpacks container. |
-| `[build].buildCommand` | `tsc -p tsconfig.build.json` (the `build` script). Does **not** run migrations. |
-| `[deploy].startCommand` | **Two steps chained with `&&`:** (1) apply pending Drizzle migrations, (2) start the Node server. See below. |
-| `[deploy].healthcheckPath` | Railway polls `GET /health` after start. |
-| `[deploy].healthcheckTimeout` | Seconds to wait for a healthy response before marking the deploy failed (30 s). |
-| `[deploy].restartPolicyType` | Restart the container if the process exits non-zero. |
-| `[deploy].restartPolicyMaxRetries` | Cap on automatic restarts. |
+| `build.builder = "NIXPACKS"` | Railway auto-detects Node/pnpm and runs the build in a Nixpacks container. |
+| `build.buildCommand` | `tsc -p tsconfig.build.json` (the `build` script). Does **not** run migrations. |
+| `deploy.startCommand` | **Two steps chained with `&&`:** (1) apply pending Drizzle migrations, (2) start the Node server. See below. |
+| `deploy.healthcheckPath` | Railway polls `GET /health` after start. |
+| `deploy.healthcheckTimeout` | Seconds to wait for a healthy response before marking the deploy failed (30 s). |
+| `deploy.restartPolicyType` | Restart the container if the process exits non-zero. |
+| `deploy.restartPolicyMaxRetries` | Cap on automatic restarts. |
 
 There is **no Railway cron** defined in this file. Session ticks are driven by an **in-process scheduler** in the API container (see `TICK_INTERVAL_MS` below). `GET /internal/tick` is a manual override, not a scheduled job.
 
@@ -126,7 +122,7 @@ If requests hang past 10 s, the process exits anyway so Railway is not stuck wai
 - **200** `{ "status": "ok" }` when the DB is reachable.
 - **503** `{ "status": "degraded", "detail": "db_unreachable" }` when the query throws.
 
-Railway uses `healthcheckPath = "/health"` and `healthcheckTimeout = 30` from `railway.toml`. A deploy that starts but cannot reach the database will fail the health check and roll back to the previous image.
+Railway uses `healthcheckPath` (`/health`) and `healthcheckTimeout` (30) from `railway.json`. A deploy that starts but cannot reach the database will fail the health check and roll back to the previous image.
 
 The server binds **`0.0.0.0`** (not `127.0.0.1`) so Railway’s proxy can reach it. Port comes from `PORT` (Railway-injected) or defaults to `3001` locally.
 
@@ -194,7 +190,7 @@ Do these **in order**:
 1. **Postgres** — Provision a database; note the connection string.
 2. **Clerk** — Create/configure a Clerk application; note the JWKS URL.
 3. **Google Drive** — Create a service account, enable Drive API, download key, create/share parent folder with the service account email.
-4. **Railway service** — Connect this repo; ensure `railway.toml` is picked up; set env vars (`DATABASE_URL`, `CLERK_JWKS_URL`, `CORS_ORIGINS`, Google vars, optional Sentry/Brevo/TICK_*).
+4. **Railway service** — Connect this repo; ensure `railway.json` is picked up; set env vars (`DATABASE_URL`, `CLERK_JWKS_URL`, `CORS_ORIGINS`, Google vars, optional Sentry/Brevo/TICK_*).
 5. **First deploy** — Push to the connected branch. Build runs `pnpm build`; start runs **migrate then start**. Confirm `GET /health` returns `{ "status": "ok" }`.
 6. **Note the public API URL** — Railway-generated hostname or custom domain; the web app's `VITE_API_URL` points here.
 7. **CORS** — Add the web app's Pages URL (and custom domain) to `CORS_ORIGINS`; redeploy if needed.

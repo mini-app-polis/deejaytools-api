@@ -1,0 +1,15 @@
+node_modules
+dist
+.env
+.env.local
+.env.*.local
+*.tsbuildinfo
+.DS_Store
+coverage
+.turbo
+.pnpm-store/
+
+# Vite/Vitest writes a transient bundled config next to the real config while
+# loading it. Vitest is supposed to clean these up but doesn't always (e.g. on
+# aborted runs).
+*.timestamp-*.mjs

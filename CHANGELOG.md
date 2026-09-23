@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/mini-app-polis/deejaytools-api/compare/v1.0.2...v1.1.0) (2026-09-23)
+
+
+### Features
+
+* **schemas:** add response schemas for associations, check-ins, pair refs and chunk upload ([2d51827](https://github.com/mini-app-polis/deejaytools-api/commit/2d51827449cd4cf7220306f82c90c5cf323ec154))
+
 ## [1.0.2](https://github.com/mini-app-polis/deejaytools-api/compare/v1.0.1...v1.0.2) (2026-09-23)
 
 

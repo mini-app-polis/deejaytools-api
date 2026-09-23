@@ -51,7 +51,7 @@ the gap is real, and the trigger to remediate is well-defined.
 ## Trigger to revisit
 
 Add the M2M path when any of the following becomes true:
-- A Python cog needs to write to deejaytools-com-api.
+- A Python cog needs to write to deejaytools-api.
 - A TypeScript service in the ecosystem needs to make M2M calls and
   `common-typescript-utils` ships an M2M helper.
 - Any non-browser caller (scheduled job, third-party webhook, etc.)

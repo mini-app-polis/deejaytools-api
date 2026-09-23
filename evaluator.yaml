@@ -39,14 +39,21 @@ exemptions:
       need a fourth pattern explicitly modelling "admin-managed shared
       resource" — a standards-repo change.
 
+  - rule: CD-030
+    reason: >-
+      Not applicable: this API has no machine callers. Its one caller is the
+      deejaytools.com React app, which sends Clerk session JWTs, and there
+      are no plans for machines (cogs, services, scheduled jobs) to call it,
+      so there is no machine-key set to configure. The human half, CD-029,
+      still applies and is graded. See
+      docs/decisions/ADR-003-jwt-only-clerk-verification.md. If a machine
+      caller is ever planned, remove this exemption, add a named-machine-key
+      verifier to src/middleware/auth.ts (routed by dot count, constant-time
+      comparison against the machines this API declares), and document
+      <MACHINE_NAME>_API_KEY in .env.example.
+
   - rule: XSTACK-002
     reason: >-
       Evaluator false positive — src/test/mocks.ts is test fixture code that constructs mock Hono Context responses with c.json. The check cannot distinguish between production route handlers and test-only mocks that mirror handler shape. Test fixtures correctly bypass the success/error envelope helpers because they are simulating Context behavior, not producing real responses. To remove this exemption, update check_hono_envelope_helpers in evaluator-cog to exclude files under src/test/ or **/test/ or *.test.ts.
-
-deferrals:
-  - rule: CD-019
-    reason: >-
-      The API verifies Clerk session JWTs only (RS256 via JWKS). It does not configure a machine-key verifier, so it fails CD-019 receiver step (6), which requires both populations to be configured. Justification: there are no machine callers in scope. The deejaytools-com ecosystem is browser-to-API only — no Python cogs push to this API, and the React app sends user JWTs. Configuring a key set that holds no keys is drift surface, not security. Revisit when (a) any Python cog needs to write to deejaytools-api, (b) a TypeScript service needs to make machine calls and `common-typescript-utils` ships a verifier, or (c) any non-browser caller is introduced. See docs/decisions/ADR-003-jwt-only-clerk-verification.md. To remove this deferral: add a named-machine-key verifier to src/middleware/auth.ts (route structurally by dot count — a JWT has two dots, a machine key does not — and compare the key in constant time against the machines this API declares, never against a database), declare each machine and its key variable, add the `<MACHINE_NAME>_API_KEY` entries to .env.example, document both paths in the README, and mark ADR-003 superseded. Note this deferral replaced one against CD-012, which required the Clerk M2M opaque-token path and was retired in Sep 2026 — see ecosystem-standards ADR-008. The old remediation (a BAPI verify call and CLERK_SECRET_KEY) is no longer the work.
-    until: null
 
 # TEST-001/002/004 covered by api-service type scoping.

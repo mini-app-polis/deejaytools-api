@@ -4,8 +4,14 @@ Date: 2026-04-24
 
 ## Status
 
-Accepted. The decision — verify session JWTs, defer machine callers —
-still stands.
+Accepted. Revised Sep 2026: machine callers are **out of scope**, not
+deferred. The API serves the deejaytools.com web app only and there are no
+plans for machines to call it. ecosystem-standards split the receiver side
+of CD-019 into CD-029 (verifying Clerk sessions) and CD-030 (verifying
+named machine keys); this API is held to CD-029 and records CD-030 as an
+**exemption** in `evaluator.yaml`. The JWT-only implementation is
+unchanged. Should a machine caller ever be planned, the exemption goes and
+the work described in the note below applies.
 
 > **Superseded in part (Sep 2026).** This ADR was written against
 > ecosystem-standards CD-012, which required the Clerk M2M opaque-token
@@ -14,8 +20,8 @@ still stands.
 > comparison against configuration, with no Clerk involvement and no
 > remote verification call. See ecosystem-standards ADR-008.
 >
-> What this means here: the deferral is unchanged in substance, but it
-> now sits against CD-019 in `evaluator.yaml`, and the
+> What this means here: the machine half is now CD-030, exempted in
+> `evaluator.yaml` since the Sep 2026 revision above, and the
 > implementation shape described in **Trigger to revisit** and
 > **Consequences** below is out of date. There is no BAPI call to add
 > and no `CLERK_SECRET_KEY` to introduce. The work is a machine-key
@@ -50,8 +56,8 @@ the gap is real, and the trigger to remediate is well-defined.
 
 ## Trigger to revisit
 
-Add the M2M path when any of the following becomes true:
-- A Python cog needs to write to deejaytools-com-api.
+None of these is planned. Add a machine path only if one becomes true:
+- A Python cog needs to write to deejaytools-api.
 - A TypeScript service in the ecosystem needs to make M2M calls and
   `common-typescript-utils` ships an M2M helper.
 - Any non-browser caller (scheduled job, third-party webhook, etc.)
@@ -72,7 +78,8 @@ Add the M2M path when any of the following becomes true:
 
 ## References
 
-- ecosystem-standards CD-019 (Bearer credential contract) — replaced CD-012
+- ecosystem-standards CD-019 (Bearer credential contract) — replaced CD-012;
+  CD-029 / CD-030 (its receiver side, split Sep 2026)
 - ecosystem-standards ADR-008 (named machine keys as the machine identity)
-- evaluator.yaml — CD-019 deferral
+- evaluator.yaml — CD-030 exemption
 - src/middleware/auth.ts — JWT-only implementation

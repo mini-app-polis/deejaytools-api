@@ -18,11 +18,11 @@ app keeps its own copy; both must change together when the contract does.
 | Observability | Sentry (errors), common-typescript-utils logger (structured logs) |
 | Deployment | Railway (NIXPACKS, `railway.json`; `startCommand` runs `pnpm db:migrate && pnpm start`) |
 
-Auth verifies Clerk session JWTs only. Machine callers are deferred —
-see [ADR-003](./docs/decisions/ADR-003-jwt-only-clerk-verification.md) for
-rationale and revisit triggers. The deferred work is a named-machine-key
-verifier (ecosystem-standards CD-019), not the Clerk M2M opaque-token
-path the ADR was originally written against; that was retired in Sep 2026.
+Auth verifies Clerk session JWTs only (ecosystem-standards CD-029).
+Machine callers are out of scope — the API's only caller is the web app —
+so CD-030, the machine-key half of the credential contract, does not apply
+and is exempted in `evaluator.yaml`. See
+[ADR-003](./docs/decisions/ADR-003-jwt-only-clerk-verification.md).
 
 ## Data inputs
 

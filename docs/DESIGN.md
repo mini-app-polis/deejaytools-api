@@ -29,7 +29,7 @@ The old platform auto-determined queue type server-side based on division `is_pr
 
 ## Shared library
 
-**common-typescript-utils (npm) + src/schemas (workspace)**
+**common-typescript-utils (npm) + src/schemas (local copy)**
 Generic cross-project utilities (structured logger, success/error envelopes, Clerk `verifyClerkToken`, `UserRoleSchema`, pagination helpers) ship as [`common-typescript-utils`](https://www.npmjs.com/package/common-typescript-utils) on npm. Deejaytools-specific Zod enums (`SessionStatusSchema`, `DivisionSchema`, `PartnerRoleSchema`, etc.) live in `src/schemas`. The web app (`deejaytools-com`) keeps its own copy in its `src/schemas`; the two are kept in step by hand, and the `*.contract.test.ts` suites guard this side. They stay out of the generic library to avoid coupling domain types to it.
 
 ## Observability

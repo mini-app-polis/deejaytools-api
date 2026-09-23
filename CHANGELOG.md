@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/mini-app-polis/deejaytools-api/compare/v1.0.1...v1.0.2) (2026-09-23)
+
+
+### Bug Fixes
+
+* **auth:** verify the token issuer against CLERK_ISSUER (CD-029) ([f780593](https://github.com/mini-app-polis/deejaytools-api/commit/f78059318a73abaeb6729473e3928f59e16ba9f1))
+
 ## [1.0.1](https://github.com/mini-app-polis/deejaytools-api/compare/v1.0.0...v1.0.1) (2026-09-22)
 
 

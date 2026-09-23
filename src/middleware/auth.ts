@@ -32,6 +32,17 @@ export function jwksUrl(): string {
   return url;
 }
 
+/**
+ * The issuer a session JWT must carry in `iss` (CD-029). The JWKS proves a
+ * token was signed by a key it serves; the issuer proves which Clerk
+ * instance issued it.
+ */
+export function clerkIssuer(): string {
+  const issuer = process.env.CLERK_ISSUER;
+  if (!issuer) throw new Error("CLERK_ISSUER is required");
+  return issuer;
+}
+
 export function bearerToken(c: Context): string | null {
   const h = c.req.header("Authorization") ?? "";
   return h.startsWith("Bearer ") ? h.slice(7) : null;
@@ -49,7 +60,7 @@ async function resolveAuthUser(c: Context): Promise<AuthUser | Response> {
   }
   let payload: ClerkPayload;
   try {
-    payload = await verifyClerkToken(token, jwksUrl());
+    payload = await verifyClerkToken(token, jwksUrl(), clerkIssuer());
   } catch (err) {
     logger.warn({
       event: "auth_failed",

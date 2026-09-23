@@ -163,6 +163,7 @@ Calls the fleet's shared `mini-app-polis/.github/.github/workflows/evaluate.yml@
 |----------|----------|-------|
 | `DATABASE_URL` | **Yes** | Postgres connection string (Railway Postgres plugin or external). |
 | `CLERK_JWKS_URL` | **Yes** | Clerk JWKS URL for JWT verification. |
+| `CLERK_ISSUER` | **Yes** | Issuer the token's `iss` must equal (`https://clerk.deejaytools.com`); stated by Clerk's `/.well-known/openid-configuration`. Unset → every authenticated request is rejected. |
 | `CORS_ORIGINS` | **Yes** | Comma-separated browser origins (e.g. `https://deejaytools.com,https://www.deejaytools.com`). |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | **Yes** (for uploads) | Drive service account client email. |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | **Yes** (for uploads) | PEM private key; use `\n` escapes in the env var — code unescapes with `.replace(/\\n/g, "\n")`. |
@@ -194,7 +195,7 @@ Do these **in order**:
 1. **Postgres** — Provision a database; note the connection string.
 2. **Clerk** — Create/configure a Clerk application; note the JWKS URL.
 3. **Google Drive** — Create a service account, enable Drive API, download key, create/share parent folder with the service account email.
-4. **Railway service** — Connect this repo; ensure `railway.json` is picked up; set env vars (`DATABASE_URL`, `CLERK_JWKS_URL`, `CORS_ORIGINS`, Google vars, optional Sentry/Brevo/TICK_*).
+4. **Railway service** — Connect this repo; ensure `railway.json` is picked up; set env vars (`DATABASE_URL`, `CLERK_JWKS_URL`, `CLERK_ISSUER`, `CORS_ORIGINS`, Google vars, optional Sentry/Brevo/TICK_*).
 5. **First deploy** — Push to the connected branch. Build runs `pnpm build`; start runs **migrate then start**. Confirm `GET /health` returns `{ "status": "ok" }`.
 6. **Note the public API URL** — Railway-generated hostname or custom domain; the web app's `VITE_API_URL` points here.
 7. **CORS** — Add the web app's Pages URL (and custom domain) to `CORS_ORIGINS`; redeploy if needed.

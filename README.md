@@ -95,6 +95,7 @@ runtime:
 
 - `DATABASE_URL` — Postgres connection string.
 - `CLERK_JWKS_URL` — Clerk public key endpoint for JWT verification.
+- `CLERK_ISSUER` — the issuer every session JWT must carry in `iss` (`https://clerk.deejaytools.com` in production).
 - `CORS_ORIGINS` — comma-separated allowed origins.
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL` — service account email for Drive uploads.
 - `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` — PEM private key (escape newlines as `\n` in env).

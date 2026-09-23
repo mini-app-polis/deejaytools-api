@@ -5,7 +5,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
-import { bearerToken, jwksUrl, requireAuth } from "../middleware/auth.js";
+import { bearerToken, clerkIssuer, jwksUrl, requireAuth } from "../middleware/auth.js";
 
 const logger = createLogger("deejaytools-api");
 
@@ -35,7 +35,7 @@ authRoutes.post("/sync", zValidator("json", syncBody), async (c) => {
   }
   let payload;
   try {
-    payload = await verifyClerkToken(token, jwksUrl());
+    payload = await verifyClerkToken(token, jwksUrl(), clerkIssuer());
   } catch (err) {
     logger.warn({
       event: "auth_sync_failed",

@@ -25,9 +25,9 @@ requireAuth / requireAdmin middleware
   │
   ├─ bearerToken(c) — strip "Bearer " prefix; null → 401
   │
-  ├─ verifyClerkToken(token, CLERK_JWKS_URL)
+  ├─ verifyClerkToken(token, CLERK_JWKS_URL, CLERK_ISSUER)
   │     JWKS fetch (cached 1h) → import RS256 public key by kid (cached 1h)
-  │     → signature verify → exp check (if numeric) → payload.sub
+  │     → signature verify → exp check (if numeric) → iss check → payload.sub
   │
   ├─ SELECT users WHERE id = payload.sub
   │     no row → 401 USER_NOT_SYNCED
@@ -71,23 +71,23 @@ Implemented in `common-typescript-utils` (`dist/auth.js`) — a hand-rolled **We
 | Key cache | `Map<kid, { key, expiry }>`, **1 hour TTL** per `kid` |
 | Algorithm | `RSASSA-PKCS1-v1_5` with **SHA-256** (`crypto.subtle.verify`) |
 | `exp` | Reject only if `exp` is a number and `Date.now() / 1000 >= exp`; omitted `exp` is not checked |
+| `iss` | Must equal `CLERK_ISSUER` (passed as `expectedIssuer`); otherwise `Untrusted issuer` |
 | `sub` | Require non-empty string; returned as `ClerkPayload.sub` |
 | Email | Optional: `payload.email` or first `email_addresses[].email_address` |
 
-JWKS URL comes from **`CLERK_JWKS_URL`** (read via `jwksUrl()` in [`middleware/auth.ts`](../src/middleware/auth.ts)).
+JWKS URL comes from **`CLERK_JWKS_URL`** (read via `jwksUrl()`) and the expected issuer from **`CLERK_ISSUER`** (read via `clerkIssuer()`), both in [`middleware/auth.ts`](../src/middleware/auth.ts). ecosystem-standards CD-029 requires both.
 
 ### What it does **not** check
 
-- **`iss` (issuer)** — not validated
 - **`aud` (audience)** — not validated
 - **`nbf` (not before)** — not validated
 - **`exp` absent** — not rejected; token treated as non-expiring
 
 **Signature** and presence/shape of **`sub`** are always enforced; **`exp`** is enforced only when the claim is a number. This matches [ADR-003](decisions/ADR-003-jwt-only-clerk-verification.md): session JWTs only, no machine callers.
 
-### `CLERK_JWKS_URL` missing
+### `CLERK_JWKS_URL` or `CLERK_ISSUER` missing
 
-`jwksUrl()` throws synchronously:
+`jwksUrl()` and `clerkIssuer()` throw synchronously, e.g.:
 
 ```typescript
 if (!url) throw new Error("CLERK_JWKS_URL is required");
@@ -95,7 +95,7 @@ if (!url) throw new Error("CLERK_JWKS_URL is required");
 
 This is a **server misconfiguration**, not a client auth failure. The throw is evaluated as an argument to `verifyClerkToken()` inside broad `try/catch` blocks in `resolveAuthUser` and `POST /v1/auth/sync`, so it is **currently caught and returned as 401 `UNAUTHORIZED`** (logged as `invalid_token` / `auth_sync_failed` with `reason: "invalid_token"`) — the same response as a genuinely bad JWT. That makes deployment mistakes easy to misread as a browser token problem.
 
-If `jwksUrl()` were called outside such a catch, the throw would propagate to `app.onError` and surface as **500** `INTERNAL`. Treat any auth 401 storm after deploy as a signal to verify `CLERK_JWKS_URL` and JWKS reachability.
+If `jwksUrl()` were called outside such a catch, the throw would propagate to `app.onError` and surface as **500** `INTERNAL`. Treat any auth 401 storm after deploy as a signal to verify `CLERK_JWKS_URL`, `CLERK_ISSUER` and JWKS reachability.
 
 ---
 
@@ -494,7 +494,7 @@ Tests that hit **`getOptionalSyncedUserId`** (session list/detail) should mock [
 
 - **One DB round-trip per authenticated request** — `resolveAuthUser` always `SELECT`s `users` by `sub`. No caching of role or sync state on the JWT.
 
-- **No `iss` / `aud` validation** — any RS256 JWT signed by a key in the configured JWKS document with a valid or absent `exp` and a valid `sub` is accepted. Protect `CLERK_JWKS_URL` and network path to Clerk JWKS.
+- **No `aud` validation** — any RS256 JWT from the configured issuer, signed by a key in the configured JWKS document, with a valid or absent `exp` and a valid `sub` is accepted. Protect `CLERK_JWKS_URL` and the network path to Clerk JWKS.
 
 - **`ManagerGuard` / `isManager` discrepancy** — [`useAuthMe.ts`](https://github.com/mini-app-polis/deejaytools-com/blob/main/src/hooks/useAuthMe.ts) exposes `isManager: me?.role === "manager"`, but the database enum **`user_role` only contains `user` and `admin`**. No API path assigns `manager`. **`/manager/*` routes are admin-only in practice** (`isAdmin` satisfies `ManagerGuard`). **TODO:** either add `manager` to the schema and role patch endpoint, or remove `isManager` and align `ManagerGuard` with admin-only intent.
 

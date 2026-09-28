@@ -36,7 +36,7 @@
     "music-metadata": "^11.15.0",
     "node-id3": "^0.2.9",
     "postgres": "^3.4.9",
-    "typescript": "^5.7.2",
+    "typescript": "^6.0.3",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -52,7 +52,7 @@
     "eslint": "^10.10.0",
     "semantic-release": "^25.0.9",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
     "vitest": "^4.1.11",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"

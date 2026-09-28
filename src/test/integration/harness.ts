@@ -8,8 +8,9 @@ import { db } from "../../db/index.js";
 import { songs, users } from "../../db/schema.js";
 import { responseCache } from "../../lib/cache.js";
 import { tokenFor } from "./clerk.js";
+import { recordHit } from "./route-ledger.js";
 
-export { db };
+export { app, db };
 
 /** Empty every table and the in-memory response cache. Runs before each test. */
 export async function resetDatabase(): Promise<void> {
@@ -37,7 +38,7 @@ let requestCounter = 0;
 export async function request<T = any>(
   method: string,
   path: string,
-  opts: { token?: string | null; body?: Json } = {}
+  opts: { token?: string | null; body?: Json; form?: FormData } = {}
 ): Promise<ApiResponse<T>> {
   requestCounter += 1;
   const headers: Record<string, string> = {
@@ -45,10 +46,12 @@ export async function request<T = any>(
   };
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  recordHit(method, path);
+  // A multipart form sets its own Content-Type, boundary included.
   const res = await app.request(path, {
     method,
     headers,
-    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+    body: opts.form ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body)),
   });
   const text = await res.text();
   return { status: res.status, body: (text ? JSON.parse(text) : null) as T };

@@ -121,6 +121,15 @@ describe("floor trial (integration)", () => {
     expect(res.status).toBe(404);
   });
 
+  it("submitting the same song to an event twice is a 409 conflict", async () => {
+    const admin = await actor("admin", { admin: true });
+    const { eventId } = await openSession(admin);
+    const alice = await dancer("alice", eventId);
+    const again = await alice.user.post("/v1/event-song-submissions", { event_id: eventId, song_id: alice.songId });
+    expect(again.status).toBe(409);
+    expect(again.body.error.code).toBe("conflict");
+  });
+
   it("deleting an event removes its sessions, check-ins and queue entries", async () => {
     const admin = await actor("admin", { admin: true });
     const { eventId, sessionId } = await openSession(admin);

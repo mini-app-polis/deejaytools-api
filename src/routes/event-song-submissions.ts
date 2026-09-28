@@ -17,6 +17,7 @@ import { eventSongSubmissions, events, managedPartnerships, partners, songs, use
 import { buildStructuredSongLabel } from "../lib/songLabel.js";
 import { partnershipDisplay } from "../lib/entityLabel.js";
 import { zValidator } from "../lib/validate.js";
+import { isUniqueViolation } from "../lib/db-errors.js";
 import { requireAuth } from "../middleware/auth.js";
 import { enqueueDriveJob } from "../services/driveJobs.js";
 import { computeStatus } from "./events.js";
@@ -26,15 +27,6 @@ const logger = createLogger("deejaytools-api");
 const listQuery = z.object({
   event_id: z.string().optional(),
 });
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code: string }).code === "23505"
-  );
-}
 
 /**
  * The division a submission actually counts as: its own override when set,

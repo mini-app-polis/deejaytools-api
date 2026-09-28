@@ -1,4 +1,5 @@
-import { CommonErrors, createLogger, success, verifyClerkToken } from "common-typescript-utils";
+import { CommonErrors, createLogger, error, success, verifyClerkToken } from "common-typescript-utils";
+import { isUniqueViolation } from "../lib/db-errors.js";
 import { zValidator } from "../lib/validate.js";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -53,26 +54,49 @@ authRoutes.post("/sync", zValidator("json", syncBody), async (c) => {
   const body = c.req.valid("json");
   const now = Date.now();
 
-  await db
-    .insert(users)
-    .values({
-      id: payload.sub,
-      email: body.email,
-      firstName: body.firstName ?? null,
-      lastName: body.lastName ?? null,
-      displayName: body.displayName ?? null,
-      role: "user",
-      createdAt: now,
-      updatedAt: now,
-    })
-    // Names are user-managed after account creation, so sync must not overwrite them.
-    .onConflictDoUpdate({
-      target: users.id,
-      set: {
+  try {
+    await db
+      .insert(users)
+      .values({
+        id: payload.sub,
         email: body.email,
+        firstName: body.firstName ?? null,
+        lastName: body.lastName ?? null,
+        displayName: body.displayName ?? null,
+        role: "user",
+        createdAt: now,
         updatedAt: now,
-      },
-    });
+      })
+      // Names are user-managed after account creation, so sync must not overwrite them.
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          email: body.email,
+          updatedAt: now,
+        },
+      });
+  } catch (err) {
+    // The email already belongs to another user row — a Clerk account that
+    // was deleted and re-created, or an email changed in Clerk to one an old
+    // row still holds. Rows stay tied to Clerk ids by design: this sign-in
+    // is refused rather than handed the other row's data, and moving the row
+    // is an organizer's call. Say so, instead of failing as a 500.
+    if (isUniqueViolation(err, "users_email_unique")) {
+      logger.warn({
+        event: "auth_sync_email_conflict",
+        category: "api",
+        context: { userId: payload.sub },
+      });
+      return c.json(
+        error(
+          "EMAIL_BELONGS_TO_ANOTHER_ACCOUNT",
+          "This email address is already linked to a different sign-in. Contact an organizer to have your account moved to this sign-in."
+        ),
+        409
+      );
+    }
+    throw err;
+  }
 
   const [row] = await db.select().from(users).where(eq(users.id, payload.sub)).limit(1);
   if (!row) {

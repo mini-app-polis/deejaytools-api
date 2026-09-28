@@ -1,3 +1,10 @@
+## [1.1.4](https://github.com/mini-app-polis/deejaytools-api/compare/v1.1.3...v1.1.4) (2026-09-28)
+
+
+### Bug Fixes
+
+* return 409 for duplicate teams, submissions and sign-in emails instead of 500 ([6f8384d](https://github.com/mini-app-polis/deejaytools-api/commit/6f8384dacc4cfc70ba4a98f3f7abd8244a3fde5e))
+
 ## [1.1.3](https://github.com/mini-app-polis/deejaytools-api/compare/v1.1.2...v1.1.3) (2026-09-28)
 
 

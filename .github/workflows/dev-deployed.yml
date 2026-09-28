@@ -1,0 +1,62 @@
+name: dev-deployed
+
+# Runs when Railway reports a successful deploy of the dev environment
+# (Railway posts GitHub deployments; the environment is named
+# "<project> / dev"). It smoke-tests the API that just went live, then asks
+# deejaytools-com to run the live contract suite against it — the suite
+# lives there, next to the schemas it checks. Triggering on the deploy
+# rather than on the push means the suite meets the new API, not the one
+# it replaced.
+#
+# The cross-repository trigger uses the promote GitHub App (the same org
+# secrets as promote and automerge): a repository_dispatch needs a token
+# with Contents: write on deejaytools-com, which GITHUB_TOKEN never has.
+
+on: deployment_status
+
+permissions:
+  contents: read
+
+env:
+  API: https://api-dev.deejaytools.com
+
+jobs:
+  smoke-and-contract:
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      endsWith(github.event.deployment.environment, '/ dev')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Smoke-test the deployed API
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          curl -fsS -o /dev/null --retry 5 --retry-delay 5 --retry-all-errors "$API/health" \
+            || fail "$API/health did not answer after the deploy."
+          # An authenticated route without a token must refuse with the
+          # error envelope — a 500 here means the app is up but broken.
+          code=$(curl -sS -o body.json -w '%{http_code}' "$API/v1/auth/me")
+          [ "$code" = 401 ] || fail "$API/v1/auth/me without a token answered $code, not 401."
+          jq -e '.error.code | type == "string"' body.json >/dev/null \
+            || fail "$API/v1/auth/me answered 401 without the error envelope."
+          echo "API OK at ${{ github.event.deployment.sha }}"
+
+      - name: Mint an App token for deejaytools-com
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.PROMOTE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PROMOTE_APP_PRIVATE_KEY }}
+          owner: mini-app-polis
+          repositories: deejaytools-com
+          permission-contents: write
+
+      - name: Run the contract suite against the new API
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          SHA: ${{ github.event.deployment.sha }}
+        run: |
+          gh api repos/mini-app-polis/deejaytools-com/dispatches \
+            -f event_type=dev-api-deployed \
+            -f "client_payload[api_sha]=$SHA"
+          echo "Asked deejaytools-com to run the contract suite against $SHA."

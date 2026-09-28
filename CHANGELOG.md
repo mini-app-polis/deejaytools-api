@@ -1,3 +1,13 @@
+## [1.1.1](https://github.com/mini-app-polis/deejaytools-api/compare/v1.1.0...v1.1.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **deps:** bump dotenv from 16.6.1 to 18.0.3 ([f150fd6](https://github.com/mini-app-polis/deejaytools-api/commit/f150fd6c6450226d98ed663766ee8d454961d7a7))
+* **deps:** bump the js-minor-and-patch group across 1 directory with 12 updates ([72373e1](https://github.com/mini-app-polis/deejaytools-api/commit/72373e15141950e34d1880f7d7ea46277613faaf))
+* **deps:** bump typescript from 5.9.3 to 6.0.3 ([c6ab9f9](https://github.com/mini-app-polis/deejaytools-api/commit/c6ab9f9b518948c88b06c9bc463d576f8053e9cf))
+* **deps:** bump zod from 3.25.76 to 4.6.5 ([15113de](https://github.com/mini-app-polis/deejaytools-api/commit/15113dea41e745fb74853659f367cf23fff46d09))
+
 # [1.1.0](https://github.com/mini-app-polis/deejaytools-api/compare/v1.0.2...v1.1.0) (2026-09-23)
 
 

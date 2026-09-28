@@ -166,6 +166,16 @@ When adding a new route, mirror the pattern from the closest existing route test
 - `routes/runs.test.ts` for a complex JOIN-heavy read endpoint.
 - `lib/queue/*.test.ts` for pure / lightly-mocked helper logic.
 
+### Integration tests
+
+```bash
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/deejaytools_test pnpm test:integration
+```
+
+`src/**/*.integration.test.ts` drive the real app against a real Postgres with nothing mocked: the schema is built from empty by applying every migration in `drizzle/`, SQL runs for real, and tokens are verified exactly as Clerk's are, against a local key server (`src/test/integration/clerk.ts`). They cover what the mocked suite cannot — constraints, cascades, queue ordering through the scheduler's tick, and one user's data staying invisible to another. CI runs them against a Postgres service container.
+
+Every table is truncated before each test, so the suite refuses to run unless `DATABASE_URL` points at a local database whose name ends in `_test`. Helpers live in `src/test/integration/harness.ts`: `actor()` gives a synced, optionally admin, user; `seedSong()` inserts the one row that normally arrives through the Drive upload flow.
+
 ## Error reporting
 
 Every route handler that maps an exception to an HTTP error response logs the underlying error with a route-specific event name (`queue_withdraw_failed`, `checkin_create_failed`, `auth_sync_failed`, `admin_checkin_inject_failed`, `song_atomic_upload_failed`, etc.) before returning the user-facing 4xx/5xx. The global `app.onError` catches anything else, sends to Sentry, and logs `unhandled_error`.

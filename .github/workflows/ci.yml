@@ -25,6 +25,23 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # A throwaway Postgres for the integration suite. The suite refuses any
+    # database that is not local and named *_test, so this is the only kind
+    # it will run against.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: deejaytools_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -39,6 +56,11 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test:coverage
+      # Real routes against real Postgres: every migration applied from
+      # empty, SQL executed, tokens verified. See vitest.integration.config.ts.
+      - run: pnpm test:integration
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/deejaytools_test
       - run: pnpm build
 
       # The zod schemas are the API contract, and this repo holds one of

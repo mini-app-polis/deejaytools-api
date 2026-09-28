@@ -25,7 +25,7 @@
     "@sentry/node": "^10.75.0",
     "@types/node": "^26.6.1",
     "common-typescript-utils": "^1.2.3",
-    "dotenv": "^16.4.7",
+    "dotenv": "^18.0.3",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "flac-tagger": "^2.0.0",

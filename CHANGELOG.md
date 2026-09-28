@@ -1,3 +1,10 @@
+## [1.1.3](https://github.com/mini-app-polis/deejaytools-api/compare/v1.1.2...v1.1.3) (2026-09-28)
+
+
+### Bug Fixes
+
+* **deps:** bump common-typescript-utils in the commons group ([135b930](https://github.com/mini-app-polis/deejaytools-api/commit/135b930d49949076a6f42876421d39ba4994b623))
+
 ## [1.1.2](https://github.com/mini-app-polis/deejaytools-api/compare/v1.1.1...v1.1.2) (2026-09-28)
 
 

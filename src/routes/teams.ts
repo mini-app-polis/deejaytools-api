@@ -6,18 +6,10 @@ import { db } from "../db/index.js";
 import { teams } from "../db/schema.js";
 import { titleCaseIfNoCaps } from "../lib/text.js";
 import { zValidator } from "../lib/validate.js";
+import { isUniqueViolation } from "../lib/db-errors.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const logger = createLogger("deejaytools-api");
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code: string }).code === "23505"
-  );
-}
 
 function mapTeam(row: typeof teams.$inferSelect) {
   return {

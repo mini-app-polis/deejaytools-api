@@ -57,15 +57,27 @@ describe("auth (integration)", () => {
     );
   });
 
-  // Known gap: users.email is unique but sync only upserts on the Clerk id.
-  // Someone who deletes their Clerk account and signs up again with the same
-  // email gets a new id, and sync fails, locking them out. `it.fails` keeps
-  // this visible: it starts failing once sync handles the case, which is the
-  // cue to turn it into a normal test with the chosen behaviour.
-  it.fails("sync succeeds for a new Clerk id whose email already exists", async () => {
+  // Rows stay tied to Clerk ids: a new Clerk id whose email another row
+  // already holds (a re-created Clerk account) is refused with a reason,
+  // not handed the other row's data and not failed as a 500.
+  it("refuses a new Clerk id whose email another user already has", async () => {
     const first = await actor("first");
     const second = await actor("second", { sync: false });
     const res = await second.post("/v1/auth/sync", { email: first.email });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("EMAIL_BELONGS_TO_ANOTHER_ACCOUNT");
+
+    // Nothing was created for the new id, and the original is untouched.
+    expect((await second.get("/v1/auth/me")).body.error.code).toBe("USER_NOT_SYNCED");
+    expect((await first.get("/v1/auth/me")).body.data.email).toBe(first.email);
+  });
+
+  it("refuses an email change to an address another user already has", async () => {
+    const alice = await actor("alice");
+    const bob = await actor("bob");
+    const res = await bob.post("/v1/auth/sync", { email: alice.email });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("EMAIL_BELONGS_TO_ANOTHER_ACCOUNT");
+    expect((await bob.get("/v1/auth/me")).body.data.email).toBe(bob.email);
   });
 });

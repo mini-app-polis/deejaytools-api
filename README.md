@@ -174,6 +174,10 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/deejaytools_test pnpm t
 
 `src/**/*.integration.test.ts` drive the real app against a real Postgres with nothing mocked: the schema is built from empty by applying every migration in `drizzle/`, SQL runs for real, and tokens are verified exactly as Clerk's are, against a local key server (`src/test/integration/clerk.ts`). They cover what the mocked suite cannot — constraints, cascades, queue ordering through the scheduler's tick, and one user's data staying invisible to another. CI runs them against a Postgres service container.
 
+**Every route must be exercised.** The suite records each request it makes; when it finishes, it fails if any route the app registers was not called by some test — unless that route is listed in `NOT_EXERCISED` in `src/test/integration/route-ledger.ts` with the reason. It also fails on stale entries there. A new endpoint therefore needs an integration test (or a written reason) before it can merge.
+
+**Coverage has a floor, not a target.** `pnpm test:coverage` fails if unit-test coverage drops below the thresholds in `vitest.config.ts`. When a change raises coverage, that same command rewrites the thresholds upward (rounded down); commit the change and the floor stays there.
+
 Every table is truncated before each test, so the suite refuses to run unless `DATABASE_URL` points at a local database whose name ends in `_test`. Helpers live in `src/test/integration/harness.ts`: `actor()` gives a synced, optionally admin, user; `seedSong()` inserts the one row that normally arrives through the Drive upload flow.
 
 ## Error reporting

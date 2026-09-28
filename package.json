@@ -24,7 +24,7 @@
     "@hono/zod-validator": "^0.9.1",
     "@sentry/node": "^10.75.1",
     "@types/node": "^26.6.2",
-    "common-typescript-utils": "^1.2.4",
+    "common-typescript-utils": "^1.2.5",
     "dotenv": "^18.0.4",
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.3",

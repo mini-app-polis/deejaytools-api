@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runTick } from "../services/scheduler.js";
-import { actor, db, seedSong } from "../test/integration/harness.js";
+import { actor, db, eventDates, seedSong } from "../test/integration/harness.js";
 
 const DIVISION = "Classic";
 
@@ -8,8 +8,7 @@ const DIVISION = "Classic";
  * waiting in order: A, B, C. */
 async function queueOfThree() {
   const admin = await actor("admin", { admin: true });
-  const today = new Date().toISOString().slice(0, 10);
-  const event = await admin.post("/v1/events", { name: "Queue Test", start_date: today, end_date: today });
+  const event = await admin.post("/v1/events", { name: "Queue Test", ...eventDates() });
   const now = Date.now();
   const session = await admin.post("/v1/sessions", {
     event_id: event.body.data.id,
@@ -114,8 +113,7 @@ describe("queue management (integration)", () => {
 
   it("a dancer withdraws their own check-in, and cannot withdraw someone else's", async () => {
     const admin = await actor("admin", { admin: true });
-    const today = new Date().toISOString().slice(0, 10);
-    const event = await admin.post("/v1/events", { name: "Own", start_date: today, end_date: today });
+    const event = await admin.post("/v1/events", { name: "Own", ...eventDates() });
     const now = Date.now();
     const session = await admin.post("/v1/sessions", {
       event_id: event.body.data.id,

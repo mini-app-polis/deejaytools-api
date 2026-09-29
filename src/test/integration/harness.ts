@@ -113,3 +113,24 @@ export async function seedSong(userId: string, partnerId: string, division = "Cl
   });
   return id;
 }
+
+/** The timezone test events are created in (the API's default). */
+export const TEST_TIMEZONE = "America/Chicago";
+
+/**
+ * Dates for a test event: yesterday through tomorrow in the event's own
+ * timezone. The API checks session times against the event's dates in that
+ * timezone, so dates built in UTC break every evening in Chicago, when UTC
+ * has already reached tomorrow; and a session near now can cross midnight
+ * either way.
+ */
+export function eventDates(): { start_date: string; end_date: string; timezone: string } {
+  const day = (offset: number) =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: TEST_TIMEZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(Date.now() + offset * 86_400_000));
+  return { start_date: day(-1), end_date: day(1), timezone: TEST_TIMEZONE };
+}

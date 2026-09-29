@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { actor, request } from "../test/integration/harness.js";
+import { actor, eventDates, request } from "../test/integration/harness.js";
 
-const today = () => new Date().toISOString().slice(0, 10);
 
 async function eventWithSession() {
   const admin = await actor("admin", { admin: true });
-  const event = await admin.post("/v1/events", { name: "Spring Open", start_date: today(), end_date: today() });
+  const event = await admin.post("/v1/events", { name: "Spring Open", ...eventDates() });
   const now = Date.now();
   const session = await admin.post("/v1/sessions", {
     event_id: event.body.data.id,

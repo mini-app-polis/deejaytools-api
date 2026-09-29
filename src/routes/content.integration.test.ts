@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actor } from "../test/integration/harness.js";
+import { actor, eventDates } from "../test/integration/harness.js";
 
 describe("a dancer's content (integration)", () => {
   it("songs: create, list, read, edit and delete, visible only to their owner", async () => {
@@ -25,8 +25,7 @@ describe("a dancer's content (integration)", () => {
 
   it("event submissions: listed per event and withdrawn by their owner", async () => {
     const admin = await actor("admin", { admin: true });
-    const today = new Date().toISOString().slice(0, 10);
-    const event = await admin.post("/v1/events", { name: "Submissions", start_date: today, end_date: today });
+    const event = await admin.post("/v1/events", { name: "Submissions", ...eventDates() });
     const eventId = event.body.data.id as string;
     const alice = await actor("alice");
     const song = await alice.post("/v1/songs", { display_name: "Tune", division: "Classic" });

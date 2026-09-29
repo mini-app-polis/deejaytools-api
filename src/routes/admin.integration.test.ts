@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actor, request } from "../test/integration/harness.js";
+import { actor, eventDates, request } from "../test/integration/harness.js";
 
 describe("admin tools (integration)", () => {
   it("an admin changes a user's role, and the new role takes effect", async () => {
@@ -14,8 +14,7 @@ describe("admin tools (integration)", () => {
 
   it("an admin sees a user's partners and their submissions to an event", async () => {
     const admin = await actor("admin", { admin: true });
-    const today = new Date().toISOString().slice(0, 10);
-    const event = await admin.post("/v1/events", { name: "Admin View", start_date: today, end_date: today });
+    const event = await admin.post("/v1/events", { name: "Admin View", ...eventDates() });
     const alice = await actor("alice");
     await alice.post("/v1/partners", { first_name: "Pat", last_name: "P", partner_role: "follower" });
     const song = await alice.post("/v1/songs", { display_name: "Tune", division: "Classic" });

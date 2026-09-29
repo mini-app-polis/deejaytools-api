@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runTick } from "../services/scheduler.js";
-import { actor, db, seedSong, type Actor } from "../test/integration/harness.js";
+import { actor, db, eventDates, seedSong, type Actor } from "../test/integration/harness.js";
 
 const DIVISION = "Classic";
 
@@ -8,8 +8,7 @@ const DIVISION = "Classic";
  * Active slots start at zero so nothing leaves the waiting queue until a
  * test opens one. */
 async function openSession(admin: Actor) {
-  const today = new Date().toISOString().slice(0, 10);
-  const event = await admin.post("/v1/events", { name: "Integration Open", start_date: today, end_date: today });
+  const event = await admin.post("/v1/events", { name: "Integration Open", ...eventDates() });
   expect(event.status).toBe(201);
   const now = Date.now();
   const session = await admin.post("/v1/sessions", {

@@ -727,9 +727,11 @@ songRoutes.delete("/:id", requireAuth, async (c) => {
 // POST /v1/songs/upload/chunk — atomic chunked upload: no song record is created until the
 // final chunk is processed and Drive confirms the upload. Song never exists in a broken state.
 // Body fields (send on every chunk): chunk (File), upload_id (UUID), chunk_index (int),
-//   total_chunks (int), original_filename (string), mime_type (string), division (string),
+//   total_chunks (int), original_filename (string), division (string),
 //   partner_id (string|"") XOR managed_partnership_id (string),
 //   routine_name (string|""), personal_descriptor (string|"")
+// A client-sent mime_type is ignored: the type is detected from the file's
+// magic bytes once assembled.
 songRoutes.post("/upload/chunk", requireAuth, async (c) => {
   const userId = c.get("user").userId;
 
@@ -746,8 +748,6 @@ songRoutes.post("/upload/chunk", requireAuth, async (c) => {
     typeof body.original_filename === "string"
       ? body.original_filename.trim() || "song.mp3"
       : "song.mp3";
-  const mimeType =
-    typeof body.mime_type === "string" ? body.mime_type.trim() || "audio/mpeg" : "audio/mpeg";
   const division = typeof body.division === "string" ? body.division.trim() : "";
   const partnerId =
     typeof body.partner_id === "string" ? body.partner_id.trim() || null : null;

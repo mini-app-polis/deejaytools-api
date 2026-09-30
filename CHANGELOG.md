@@ -1,3 +1,10 @@
+## [1.1.5](https://github.com/mini-app-polis/deejaytools-api/compare/v1.1.4...v1.1.5) (2026-09-30)
+
+
+### Bug Fixes
+
+* **deps:** bump @sentry/node in the minor-and-patch group ([e3421ec](https://github.com/mini-app-polis/deejaytools-api/commit/e3421ec0709a807efe472e4a64100e53f463b906))
+
 ## [1.1.4](https://github.com/mini-app-polis/deejaytools-api/compare/v1.1.3...v1.1.4) (2026-09-28)
 
 

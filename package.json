@@ -23,7 +23,7 @@
   "dependencies": {
     "@hono/node-server": "2.1.1",
     "@hono/zod-validator": "^0.9.1",
-    "@sentry/node": "^10.75.2",
+    "@sentry/node": "^11.0.0",
     "@types/node": "^26.6.2",
     "common-typescript-utils": "^1.2.5",
     "dotenv": "^18.0.4",
@@ -31,7 +31,7 @@
     "drizzle-orm": "^0.45.3",
     "flac-tagger": "^2.0.0",
     "google-auth-library": "^11.1.0",
-    "googleapis": "^181.0.0",
+    "googleapis": "^182.0.0",
     "hono": "4.13.9",
     "multer": "^2.4.0",
     "music-metadata": "^11.16.1",

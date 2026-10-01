@@ -119,11 +119,15 @@ function makeFinalSongRow(overrides: Record<string, unknown> = {}) {
 }
 
 /** Enqueue the 4 DB results needed for a single-chunk upload with no partner. */
-function enqueueHappyPath(existingFilenames: (string | null)[] = []) {
+function enqueueHappyPath(
+  existingFilenames: (string | null)[] = [],
+  uncopiedSubmissionIds: string[] = []
+) {
   const finalRow = makeFinalSongRow();
   enqueueSelectResult([finalRow.song]); // post-insert song select
   enqueueSelectResult([mockUserRow]); // user lookup
   enqueueSelectResult(existingFilenames.map((f) => ({ processedFilename: f }))); // existing rows for version
+  enqueueSelectResult(uncopiedSubmissionIds.map((id) => ({ id }))); // submissions still without an event copy
   enqueueSelectResult([finalRow]); // final select with partner join
 }
 
@@ -1187,6 +1191,50 @@ describe("POST /v1/songs/upload/chunk", () => {
 
     // The song record must be deleted so it doesn't appear in the user's list.
     expect(vi.mocked(mockDb.delete)).toHaveBeenCalled();
+  });
+
+  // --- event copies for submissions made while the upload was in flight ---
+
+  it("queues an event copy for each submission still without one once the file is in Drive", async () => {
+    enqueueDriveJob.mockClear();
+    vi.mocked(mockDb.delete).mockClear();
+    enqueueHappyPath([], ["sub_a", "sub_b"]);
+
+    const res = await app.request(CHUNK_BASE, { method: "POST", headers: authHeaders(), body: makeChunkForm() });
+    expect(res.status).toBe(200);
+
+    await vi.waitFor(() => expect(enqueueDriveJob).toHaveBeenCalledTimes(2));
+    expect(enqueueDriveJob).toHaveBeenCalledWith(expect.anything(), { kind: "copy", submissionId: "sub_a" });
+    expect(enqueueDriveJob).toHaveBeenCalledWith(expect.anything(), { kind: "copy", submissionId: "sub_b" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(vi.mocked(mockDb.delete)).not.toHaveBeenCalled();
+  });
+
+  it("queues nothing when no submission is waiting for a copy, and keeps the song", async () => {
+    enqueueDriveJob.mockClear();
+    vi.mocked(mockDb.delete).mockClear();
+    enqueueHappyPath();
+
+    await app.request(CHUNK_BASE, { method: "POST", headers: authHeaders(), body: makeChunkForm() });
+
+    await vi.waitFor(() => expect(vi.mocked(drive.uploadSongToDrive)).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 10));
+    expect(enqueueDriveJob).not.toHaveBeenCalled();
+    expect(vi.mocked(mockDb.delete)).not.toHaveBeenCalled();
+  });
+
+  it("keeps the uploaded song when queueing the event copy fails", async () => {
+    enqueueDriveJob.mockClear();
+    enqueueDriveJob.mockRejectedValueOnce(new Error("db down"));
+    vi.mocked(mockDb.delete).mockClear();
+    enqueueHappyPath([], ["sub_a"]);
+
+    await app.request(CHUNK_BASE, { method: "POST", headers: authHeaders(), body: makeChunkForm() });
+
+    await vi.waitFor(() => expect(enqueueDriveJob).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 10));
+    // A failed requeue is reported, never treated as a failed upload.
+    expect(vi.mocked(mockDb.delete)).not.toHaveBeenCalled();
   });
 
   it("does not create a song record when partner validation fails", async () => {

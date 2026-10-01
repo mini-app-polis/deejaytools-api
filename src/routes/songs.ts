@@ -173,6 +173,47 @@ function mapSong(
 }
 
 /**
+ * Queue an event copy for each of the song's submissions that has none yet.
+ *
+ * A song is usable as soon as its final chunk is accepted, before the Drive
+ * upload finishes. A submission made in that window queues a copy job that
+ * can run before the file exists — it finds no source and finishes without
+ * copying, and nothing would queue it again. Called once the song has its
+ * Drive file. A submission whose first job is still pending simply gets a
+ * second one; whichever runs second sees the copy recorded and does nothing.
+ *
+ * Best-effort, and never throws: the upload has succeeded, and a failure here
+ * must not send the caller down the path that deletes the song.
+ */
+async function requeueEventCopies(songId: string): Promise<void> {
+  let submissionIds: string[] = [];
+  try {
+    const rows = await db
+      .select({ id: eventSongSubmissions.id })
+      .from(eventSongSubmissions)
+      .where(and(eq(eventSongSubmissions.songId, songId), isNull(eventSongSubmissions.driveCopyFileId)));
+    submissionIds = rows.map((r) => r.id);
+    for (const submissionId of submissionIds) {
+      await enqueueDriveJob(db, { kind: "copy", submissionId });
+    }
+  } catch (err) {
+    logger.error({
+      event: "drive_copy_requeue_failed",
+      category: "api",
+      context: { songId, submissionIds },
+      error: err,
+    });
+    Sentry.withScope((scope) => {
+      scope.setLevel("error");
+      scope.setTag("subsystem", "drive_jobs");
+      scope.setTag("drive_job_kind", "copy");
+      scope.setContext("drive_job", { song_id: songId, submission_ids: submissionIds, stage: "requeue" });
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)));
+    });
+  }
+}
+
+/**
  * Shared logic: tag audio bytes, upload to Drive, update the song row.
  * Used by both the single-request upload endpoint and the chunked upload endpoint.
  */
@@ -367,6 +408,8 @@ async function buildAndUploadSong(
       updatedAt: now,
     })
     .where(eq(songs.id, song.id));
+
+  await requeueEventCopies(song.id);
 
   const [r] = await db
     .select({

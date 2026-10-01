@@ -446,6 +446,56 @@ describe("WAV tagging (audio/wav)", () => {
     expect(result).toBe(bytes);
   });
 
+  // A data chunk whose header claims more bytes than the file holds: truncated
+  // files, and streaming writers that leave the size at 0xFFFFFFFF. The audio
+  // that IS there must survive tagging, with the size corrected to match it.
+  function wavWithOverrunningData(declaredSize: number, audio: Buffer, before: Buffer[] = []): Buffer {
+    const fmt = buildMinimalWav().subarray(12, 12 + 24);
+    const dataHeader = Buffer.alloc(8);
+    dataHeader.write("data", 0, "latin1");
+    dataHeader.writeUInt32LE(declaredSize, 4);
+    const body = Buffer.concat([Buffer.from("WAVE", "latin1"), fmt, ...before, dataHeader, audio]);
+    const riff = Buffer.alloc(8);
+    riff.write("RIFF", 0, "latin1");
+    riff.writeUInt32LE(body.length, 4);
+    return Buffer.concat([riff, body]);
+  }
+
+  it("keeps the audio when the data chunk's declared size overruns the file", async () => {
+    const audio = Buffer.alloc(100, 0x7f);
+    const bytes = wavWithOverrunningData(1000, audio);
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "New Title",
+      newArtist: "New Artist",
+      mimeType: "audio/wav",
+    });
+    const chunks = walkChunks(result);
+    expect(chunks.map((c) => c.id)).toEqual(["fmt ", "data", "id3 "]);
+    const data = chunks.find((c) => c.id === "data")!;
+    expect(data.payload.equals(audio)).toBe(true);
+    expect(result.readUInt32LE(4)).toBe(result.length - 8);
+    const id3 = chunks.find((c) => c.id === "id3 ")!;
+    const tags = NodeID3.read(id3.payload);
+    expect(typeof tags === "object" && tags !== null ? tags.title : null).toBe("New Title");
+  });
+
+  it("keeps the audio of a streamed WAV whose data size was left at 0xFFFFFFFF", async () => {
+    const audio = Buffer.alloc(51, 0x40); // odd length: the rewritten chunk needs a pad byte
+    const list = Buffer.concat([Buffer.from("LIST", "latin1"), Buffer.from([4, 0, 0, 0]), Buffer.from("INFO", "latin1")]);
+    const bytes = wavWithOverrunningData(0xffffffff, audio, [list]);
+    const result = await tagSongBytes({
+      bytes,
+      newTitle: "New Title",
+      newArtist: "New Artist",
+      mimeType: "audio/wav",
+    });
+    const chunks = walkChunks(result);
+    expect(chunks.map((c) => c.id)).toEqual(["fmt ", "LIST", "data", "id3 "]);
+    expect(chunks.find((c) => c.id === "data")!.payload.equals(audio)).toBe(true);
+    expect(result.readUInt32LE(4)).toBe(result.length - 8);
+  });
+
   it("handles odd-length id3 payload with correct RIFF padding", async () => {
     const bytes = buildMinimalWav();
     const result = await tagSongBytes({

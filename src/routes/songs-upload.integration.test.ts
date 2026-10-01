@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { shareDriveFileWithUsers, uploadSongToDrive } from "../services/drive.js";
-import { actor, overHttp, request, type Actor } from "../test/integration/harness.js";
+import { actor, eventDates, overHttp, request, tick, type Actor } from "../test/integration/harness.js";
 
 /**
  * The chunked song upload, end to end through the API: multipart parsing,
@@ -106,6 +106,39 @@ describe("song upload (integration)", () => {
     // song row records the same name.
     expect(opts.filename).toMatch(/^AliceTester_PatPartner_Classic_\d{4}_BlueMonday_v01\.mp3$/);
     expect(song.body.data.processed_filename).toBe(opts.filename);
+  });
+
+  it.skipIf(overHttp)("queues the event copy again once the upload lands, for a song submitted while it was in flight", async () => {
+    // Hold the Drive upload open so the song is submitted, and a tick runs,
+    // before its file exists.
+    let finishUpload!: (v: { fileId: string; folderId: string }) => void;
+    upload.mockReturnValue(new Promise((resolve) => (finishUpload = resolve)));
+    share.mockResolvedValue({ shared: [], failed: [] } as never);
+    const admin = await actor("admin", { admin: true });
+    const alice = await actor("alice");
+
+    const last = await sendChunk(alice, { uploadId: randomUUID(), index: 0, total: 1, bytes: MP3 });
+    const songId = last.body.data.song.id as string;
+    const event = await admin.post("/v1/events", { name: "In Flight", ...eventDates() });
+    const submitted = await alice.post("/v1/event-song-submissions", { event_id: event.body.data.id, song_id: songId });
+    expect(submitted.status).toBe(201);
+    const submissionId = submitted.body.data.id as string;
+
+    // The copy job runs while the song has no Drive file, and finds nothing to copy.
+    await tick();
+    const jobsFor = async () =>
+      ((await admin.get("/v1/admin/drive-jobs")).body.data as { submission_id: string; kind: string; status: string }[])
+        .filter((j) => j.submission_id === submissionId && j.kind === "copy");
+    expect((await jobsFor()).map((j) => j.status)).toEqual(["done"]);
+
+    // The upload lands: the copy is queued again, now that there is a file to copy.
+    finishUpload({ fileId: "drive-file-late", folderId: "drive-folder-late" });
+    await eventually(
+      () => alice.get(`/v1/songs/${songId}`),
+      (r) => r.body?.data?.drive_file_id === "drive-file-late"
+    );
+    const jobs = await eventually(jobsFor, (j) => j.some((x) => x.status === "pending"));
+    expect(jobs.map((j) => j.status).sort()).toEqual(["done", "pending"]);
   });
 
   it("removes the song again when the Drive upload fails, so no broken entry is left behind", async () => {

@@ -117,16 +117,11 @@ space), not prepended to the file.
 - Provenance reads `TIT2`, `TPE1`, `TALB` from the existing `id3 ` chunk (the
   last one, if several). `LIST/INFO` tags are not read. A chunk named `ID3 `
   (uppercase) is not recognised: it is kept, and a second tag is added as `id3 `.
-
-> **Known defect — do not replicate.** Chunks are read while
-> `offset + 8 + declared size <= file length`. A chunk whose declared size runs
-> past the end of the file stops the walk, and **that chunk and everything after
-> it are dropped from the output**. A WAV whose `data` chunk header overstates its
-> length (truncated files, or streaming writers that leave the size as
-> `0xFFFFFFFF`) comes out with its audio removed: the chunks before `data`
-> (`fmt `, perhaps `LIST`) and the new `id3 ` chunk. It is not detected and the
-> file is uploaded anyway. A reimplementation
-> should keep the trailing bytes, clamping the last chunk to the end of the file.
+- **Oversized last chunk:** a chunk whose declared size runs past the end of the
+  file (a truncated file, or a streaming writer that left the `data` size at
+  `0xFFFFFFFF`) is kept with the bytes actually present and re-written with its
+  real length, so the audio survives. The new `id3 ` chunk goes after it.
+- Fewer than 8 bytes left over after the last whole chunk are dropped.
 
 ### FLAC — Vorbis comments (`flac-tagger`)
 

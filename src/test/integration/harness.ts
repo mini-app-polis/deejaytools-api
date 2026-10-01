@@ -9,10 +9,20 @@ import { songs, users } from "../../db/schema.js";
 import { responseCache } from "../../lib/cache.js";
 import { tokenFor } from "./clerk.js";
 import { recordHit } from "./route-ledger.js";
+import { integrationBaseUrl } from "./target.js";
 
 export { app, db };
 
-/** Empty every table and the in-memory response cache. Runs before each test. */
+/** Origin of a separately started API to drive over HTTP, or undefined to
+ * call the app in-process. See target.ts and docs/CONFORMANCE.md. */
+export const baseUrl = integrationBaseUrl();
+/** True when requests go over HTTP to `baseUrl`. Tests that need in-process
+ * stand-ins (the mocked Drive calls) skip themselves on this. */
+export const overHttp = baseUrl !== undefined;
+
+/** Empty every table and the in-memory response cache. Runs before each test.
+ * Over HTTP only the tables can be reset; the target's own response cache
+ * (3–5 s TTLs) carries over between tests. See docs/CONFORMANCE.md. */
 export async function resetDatabase(): Promise<void> {
   const rows = await db.execute<{ tablename: string }>(
     sql`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`
@@ -33,28 +43,54 @@ export interface ApiResponse<T = any> {
 
 let requestCounter = 0;
 
-/** Call the app in-process. Each call gets its own client address so the
- * suite never trips the per-IP rate limit. */
+/** Call the API: in-process by default, over HTTP to `baseUrl` when set.
+ * Each call gets its own client address so the suite never trips the per-IP
+ * rate limit (an HTTP target must take the client address from
+ * X-Forwarded-For, as this API does behind Railway). */
 export async function request<T = any>(
   method: string,
   path: string,
-  opts: { token?: string | null; body?: Json; form?: FormData } = {}
+  opts: { token?: string | null; body?: Json; form?: FormData; headers?: Record<string, string> } = {}
 ): Promise<ApiResponse<T>> {
   requestCounter += 1;
   const headers: Record<string, string> = {
+    ...opts.headers,
     "x-forwarded-for": `10.${(requestCounter >> 16) & 255}.${(requestCounter >> 8) & 255}.${requestCounter & 255}`,
   };
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   recordHit(method, path);
   // A multipart form sets its own Content-Type, boundary included.
-  const res = await app.request(path, {
+  const init: RequestInit = {
     method,
     headers,
     body: opts.form ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body)),
-  });
+  };
+  const res = baseUrl ? await fetch(`${baseUrl}${path}`, init) : await app.request(path, init);
   const text = await res.text();
-  return { status: res.status, body: (text ? JSON.parse(text) : null) as T };
+  let body: T;
+  try {
+    body = (text ? JSON.parse(text) : null) as T;
+  } catch {
+    throw new Error(`${method} ${path} → ${res.status} with a non-JSON body: ${text.slice(0, 200)}`);
+  }
+  return { status: res.status, body };
+}
+
+/**
+ * One scheduler pass (session statuses, queue auto-fill, Drive jobs), through
+ * GET /internal/tick so an HTTP target runs its own. Neither mode runs the
+ * background scheduler during tests, so this is the only thing that advances
+ * the queue. Sends INTEGRATION_TICK_SECRET as x-tick-secret when set.
+ */
+export async function tick(): Promise<void> {
+  const secret = process.env.INTEGRATION_TICK_SECRET;
+  const res = await request("GET", "/internal/tick", {
+    headers: secret === undefined ? undefined : { "x-tick-secret": secret },
+  });
+  if (res.status !== 200) {
+    throw new Error(`GET /internal/tick failed: ${res.status} ${JSON.stringify(res.body)}`);
+  }
 }
 
 /** A signed-in user: synced through the real /auth/sync, optionally made admin. */

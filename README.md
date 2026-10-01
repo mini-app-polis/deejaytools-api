@@ -33,9 +33,11 @@ and is exempted in `evaluator.yaml`. See
 - **Song files** (MP3, WAV, FLAC, m4a) via the chunked upload endpoint
   `POST /v1/songs/upload/chunk`. Each request carries a chunk plus
   metadata (`upload_id`, `chunk_index`, `total_chunks`, `division`,
-  `partner_id`, `routine_name`, `personal_descriptor`). The song row is
-  only created when the final chunk is processed and Drive confirms the
-  upload — there is no broken intermediate state. Files are persisted
+  `partner_id`, `routine_name`, `personal_descriptor`). Nothing is
+  written to the database until the final chunk arrives; that request
+  creates the song row and responds, and tagging plus the Drive upload
+  run in the background, deleting the row again if they fail (see
+  [docs/DRIVE.md](docs/DRIVE.md#upload-pipeline)). Files are persisted
   to Google Drive via the service account env vars (`GOOGLE_SERVICE_ACCOUNT_EMAIL`,
   `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`, `GOOGLE_DRIVE_PARENT_FOLDER_ID`).
 - **Session/check-in events** posted by the floor-trial UI to
@@ -44,8 +46,9 @@ and is exempted in `evaluator.yaml`. See
   synthetic user/partner/pair rows and a queue entry without going
   through the normal user flow. Used for testing only.
 - **In-process scheduler** (`startScheduler()` in `index.ts`) drives
-  session status transitions and active-queue auto-fill on a repeating
-  timer (default 30 s). `GET /internal/tick` is an optional manual
+  session status transitions, active-queue auto-fill and the Drive job
+  queue (event copies, renames, deprecations — [docs/DRIVE.md](docs/DRIVE.md#drive_jobs-queue))
+  on a repeating timer (default 30 s). `GET /internal/tick` is an optional manual
   override for operators, not the primary driver.
 
 ## Data outputs
@@ -56,7 +59,10 @@ and is exempted in `evaluator.yaml`. See
 - **PostgreSQL writes** via Drizzle to the `deejaytools` database:
   users, partners, songs, sessions, check-ins, queue entries, events.
 - **Google Drive writes** for song files — the upload service tags
-  files with partnership/division metadata before uploading.
+  files with partnership/division metadata before uploading
+  ([docs/AUDIO-TAGGING.md](docs/AUDIO-TAGGING.md)), and queued jobs copy
+  each event submission into that event's folder
+  ([docs/DRIVE.md](docs/DRIVE.md)).
 - **Sentry error reports** for any unhandled exception in request
   handlers.
 - **Structured logs** via `createLogger('deejaytools-api')` to stdout
@@ -67,7 +73,7 @@ and is exempted in `evaluator.yaml`. See
 | Prefix | Purpose |
 |--------|---------|
 | `/health` | Liveness + readiness probe (public). Runs `SELECT 1` on each call — returns 200 `{ status: "ok" }` when the DB is reachable, 503 `{ status: "degraded" }` when it is not. |
-| `/internal/tick` | Manual operator override: runs `tickSessionStatuses()` then `fillRunningSessions()` (same as the in-process scheduler). Gated by `x-tick-secret` when `TICK_SECRET` is set; completely open when unset. |
+| `/internal/tick` | Manual operator override: runs one scheduler pass — `tickSessionStatuses()`, `fillRunningSessions()`, then a batch of Drive jobs (same as the in-process scheduler). Gated by `x-tick-secret` when `TICK_SECRET` is set; completely open when unset. |
 | `/v1/auth` | Clerk session sync / whoami. |
 | `/v1/events` | Event CRUD for event organizers. |
 | `/v1/sessions` | Session lifecycle for a single event. Reads include `event_name`, divisions, queue depth, and a derived status computed from the wall clock so display is correct even if the scheduler lags. |
@@ -76,6 +82,7 @@ and is exempted in `evaluator.yaml`. See
 | `/v1/runs` | Admin-only run history. Joins runs with sessions, events, songs, the entity, and the completing admin to produce structured display labels. |
 | `/v1/admin/checkins` | Admin-only test injection: POST creates synthetic user + partner + pair + check-in; GET lists current test data; DELETE wipes everything tied to synthetic-emailed users. |
 | `/v1/admin/songs` | Admin-only searchable directory of all songs (optional `include_deleted`). |
+| `/v1/admin/drive-jobs` | Admin-only view of the Drive job queue: status summary, job list with last error, retry of a failed job, rename backfill. |
 | `/v1/admin/users` | Admin-only user directory (search, role patch, per-user partners and event submissions). |
 | `/v1/admin/event-song-submissions` | Admin-only list of every song submission for one event (`?event_id=`), with partnership and submitter labels. |
 | `/v1/partners` | Partner records (name, role, history). |
@@ -180,7 +187,9 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/deejaytools_test pnpm t
 
 **Coverage has a floor, not a target.** `pnpm test:coverage` fails if unit-test coverage drops below the thresholds in `vitest.config.ts`. When a change raises coverage, that same command rewrites the thresholds upward (rounded down); commit the change and the floor stays there.
 
-Every table is truncated before each test, so the suite refuses to run unless `DATABASE_URL` points at a local database whose name ends in `_test`. Helpers live in `src/test/integration/harness.ts`: `actor()` gives a synced, optionally admin, user; `seedSong()` inserts the one row that normally arrives through the Drive upload flow.
+Every table is truncated before each test, so the suite refuses to run unless `DATABASE_URL` points at a local database whose name ends in `_test`. Helpers live in `src/test/integration/harness.ts`: `actor()` gives a synced, optionally admin, user; `seedSong()` inserts the one row that normally arrives through the Drive upload flow; `tick()` runs one scheduler pass through `GET /internal/tick`.
+
+**Over HTTP.** Set `INTEGRATION_BASE_URL` to the origin of a separately started server and the same suite drives it over real HTTP instead of in-process. The server can be this API or a reimplementation, so the suite doubles as a conformance check against this route table. Target setup and what is and isn't covered: [docs/CONFORMANCE.md](docs/CONFORMANCE.md).
 
 ## Error reporting
 

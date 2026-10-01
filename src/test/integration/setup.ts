@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, inject, vi } from "vitest";
 import { integrationDatabaseUrl } from "./database-url.js";
-import { startClerk, stopClerk, TEST_ISSUER } from "./clerk.js";
+import { TEST_ISSUER } from "./clerk.js";
 
 // Environment the app reads at import time, set before any test file imports
 // it. Guarded first: never let a test file open a connection to a database
@@ -8,7 +8,8 @@ import { startClerk, stopClerk, TEST_ISSUER } from "./clerk.js";
 integrationDatabaseUrl();
 process.env.NODE_ENV = "test";
 process.env.DEEJAYTOOLS_CLERK_ISSUER = TEST_ISSUER;
-process.env.DEEJAYTOOLS_CLERK_JWKS_URL = await startClerk();
+// The key server runs in the global setup for the whole suite.
+process.env.DEEJAYTOOLS_CLERK_JWKS_URL = inject("clerkJwksUrl");
 delete process.env.TICK_SECRET;
 // Feedback emails through Brevo only when a key is set; never from tests.
 delete process.env.DEEJAYTOOLS_BREVO_API_KEY;
@@ -35,7 +36,6 @@ beforeEach(async () => {
   await resetDatabase();
 });
 
-afterAll(async () => {
+afterAll(() => {
   recordRoutes(app.routes);
-  await stopClerk();
 });

@@ -37,7 +37,11 @@ export const DEFAULT_BATCH_SIZE = 10;
  */
 export const LEASE_TIMEOUT_MS = 10 * 60_000;
 
-/** 1m, 2m, 4m, 8m, 16m, then 30m thereafter. ~3h across MAX_ATTEMPTS. */
+/**
+ * Delay before the next try, given the attempt count after the failure just
+ * recorded (so never called with 0): 2m, 4m, 8m, 16m, then 30m thereafter.
+ * ~3h across MAX_ATTEMPTS.
+ */
 export function backoffMs(attempts: number): number {
   return Math.min(60_000 * 2 ** attempts, 30 * 60_000);
 }

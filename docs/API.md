@@ -143,7 +143,7 @@ Unless noted, assume these apply to every `requireAuth` / `requireAdmin` endpoin
 
 **Auth:** public (optional secret gate)
 
-**Purpose:** Manual trigger for session status advance + active-queue auto-fill (`runTick()`).
+**Purpose:** Manual trigger for one scheduler pass (`runTick()`): session status advance, active-queue auto-fill, then one batch of the Drive job queue ([DRIVE.md](./DRIVE.md#processing-processdrivejobs-once-per-tick)). Responds after the pass finishes; errors inside the pass are logged, not returned.
 
 **Path params / Query params:** none
 
@@ -477,7 +477,7 @@ const patchEvent = z.object({
 
 **Auth:** requireAdmin
 
-**Purpose:** Delete an event and cascade-delete its sessions and all floor-trial data.
+**Purpose:** Delete an event and cascade-delete its sessions and all floor-trial data, its song submissions and its run limits. After commit, a `trash` Drive job is enqueued for each submission's event copy ([DRIVE.md](./DRIVE.md#where-jobs-are-enqueued)).
 
 **Path params:** `id`
 
@@ -1640,7 +1640,7 @@ export const createManagedPartnershipBodySchema = z.object({
 
 **Auth:** requireAuth
 
-**Purpose:** Soft-delete partnership and its songs.
+**Purpose:** Soft-delete partnership and its songs. Their event submissions are deleted; after commit, a `trash` Drive job is enqueued for each submission's event copy ([DRIVE.md](./DRIVE.md#where-jobs-are-enqueued)).
 
 **Path params:** `id`
 
@@ -1722,7 +1722,7 @@ const listQuery = z.object({
 
 **Auth:** requireAuth
 
-**Purpose:** Link a owned song to an event.
+**Purpose:** Link an owned song to an event. On success a `copy` Drive job is enqueued to put the file in the event folder; an enqueue failure is reported to Sentry but does not fail the request ([DRIVE.md](./DRIVE.md#where-jobs-are-enqueued)).
 
 **Path params / Query params:** none
 
@@ -1745,7 +1745,7 @@ const listQuery = z.object({
 
 **Auth:** requireAuth
 
-**Purpose:** Remove caller's submission.
+**Purpose:** Remove caller's submission. If it had an event copy, a `trash` Drive job is enqueued for it after the delete ([DRIVE.md](./DRIVE.md#where-jobs-are-enqueued)).
 
 **Path params:** `id`
 
@@ -1910,7 +1910,7 @@ Song object in responses:
 
 **Auth:** requireAuth
 
-**Purpose:** Soft-delete song and remove event submissions.
+**Purpose:** Soft-delete song and remove event submissions. The song's own Drive file is moved to `_deprecated` inline (best-effort; failure is logged and ignored), and after commit a `trash` Drive job is enqueued for each submission's event copy ([DRIVE.md](./DRIVE.md#song-deletion)).
 
 **Path params:** `id`
 
@@ -1934,7 +1934,7 @@ Song object in responses:
 
 **Auth:** requireAuth (admins may pass `on_behalf_of_user_id`)
 
-**Purpose:** Chunked atomic upload; song row created only on final chunk; Drive upload runs in background.
+**Purpose:** Chunked upload. The song row is created when the final chunk arrives and returned at once; tagging, the Drive upload and the row's Drive fields happen in the background afterwards, and the row is deleted again if that fails. Staging, filename construction and the background steps are specified in [DRIVE.md](./DRIVE.md#upload-pipeline).
 
 **Path params / Query params:** none
 
@@ -1947,14 +1947,14 @@ Song object in responses:
 | `chunk_index` | integer | yes | 0-based |
 | `total_chunks` | integer | yes | 1–30 |
 | `original_filename` | string | no | Defaults to `"song.mp3"` when omitted or empty |
-| `mime_type` | string | no | Defaults to `"audio/mpeg"` when omitted or empty; assembled file format uses magic bytes, not this field |
+| `mime_type` | string | no | Ignored. The format comes from the assembled file's magic bytes |
 | `division` | string | yes | |
 | `partner_id` | string | portal: empty | XOR with `managed_partnership_id` |
 | `managed_partnership_id` | string | optional | |
 | `routine_name` | string | optional | |
 | `personal_descriptor` | string | optional | |
 | `on_behalf_of_user_id` | string | admin only | Target owner |
-| `entity_type` | `solo` \| `team` \| `other` | portal uploads | Creates placeholder partner |
+| `entity_type` | `team` \| `other` | portal uploads | Creates placeholder partner. Any other non-empty value, including `solo`, is rejected with `Invalid entity_type` (the handler's solo branch is unreachable) |
 | `entity_name` | string | `other` / optional solo | |
 | `team_id` | string | team uploads | Must own team |
 
@@ -1977,29 +1977,37 @@ Song object in responses:
 }
 ```
 
-`processed_filename` may still be null until background Drive upload completes.
+In this response `processed_filename`, `season_year`, `drive_file_id` and `drive_folder_id` are always null, and the partner name fields are null. They are filled in when the background build finishes; poll `GET /v1/songs/:id` (it 404s if the build failed and the row was removed).
 
-**Errors:**
+**Errors:** listed in the order the handler checks them. The first group applies to every chunk; the rest only to the final chunk.
 
 | Status | Code | Message | Trigger |
 |--------|------|---------|---------|
+| 400 | `BAD_REQUEST` | Invalid upload_id | Not a UUID (any case) |
+| 400 | `BAD_REQUEST` | division is required | Missing or blank |
+| 400 | `BAD_REQUEST` | Invalid chunk_index | Not an integer ≥ 0 after JavaScript `Number()` (so `""` → 0 is accepted) |
+| 400 | `BAD_REQUEST` | Invalid total_chunks (max 30) | Not an integer in 1–30 |
+| 400 | `BAD_REQUEST` | chunk_index out of range | `chunk_index >= total_chunks` |
+| 400 | `BAD_REQUEST` | Missing chunk field | `chunk` absent or not a file |
 | 403 | `FORBIDDEN` | Admin access required | `on_behalf_of_user_id` by non-admin |
-| 400 | `BAD_REQUEST` | Invalid upload_id / chunk_index / total_chunks / division… | Validation |
-| 400 | `BAD_REQUEST` | Chunk exceeds 10 MB limit | |
-| 400 | `BAD_REQUEST` | Portal uploads cannot specify partner_id… | Conflicting fields |
-| 400 | `BAD_REQUEST` | Invalid entity_type | |
-| 400 | `BAD_REQUEST` | Target user not found | On-behalf |
+| 400 | `BAD_REQUEST` | Chunk exceeds 10 MB limit | Chunk > 10 MiB |
+| 400 | `BAD_REQUEST` | Portal uploads cannot specify partner_id or managed_partnership_id | Final chunk: `entity_type` with a partner field |
+| 400 | `BAD_REQUEST` | Invalid entity_type | Not `team` / `other` |
+| 400 | `BAD_REQUEST` | Target user not found | On-behalf user missing |
 | 400 | `BAD_REQUEST` | team_id is required for team uploads | |
-| 400 | `BAD_REQUEST` | Team not found | |
+| 400 | `BAD_REQUEST` | Team not found | Not the effective user's team |
 | 400 | `BAD_REQUEST` | entity_name is required for other uploads | |
-| 400 | `BAD_REQUEST` | Set your name on My Profile or provide entity_name | Solo without name |
+| 400 | `BAD_REQUEST` | User not found / Set your name on My Profile or provide entity_name | Unreachable today (solo branch; `solo` is rejected earlier) |
 | 400 | `BAD_REQUEST` | Specify either partner_id or managed_partnership_id, not both | |
-| 400 | `BAD_REQUEST` | Managed partnership not found… / Partner not found… | |
-| 500 | `CHUNK_ERROR` | Failed to read uploaded chunks | readdir failure |
-| 409 | `CHUNK_MISSING` | Expected N chunks but only received M… | Incomplete upload |
-| 400 | `BAD_REQUEST` | File exceeds 100 MB limit | Assembled size |
-| 400 | `UNSUPPORTED_FORMAT` | That file doesn't look like a supported audio format… | Magic-byte check |
-| 500 | `INTERNAL` | … | Song insert failed |
+| 400 | `BAD_REQUEST` | Managed partnership not found or does not belong to you | |
+| 400 | `BAD_REQUEST` | Partner not found or does not belong to you | |
+| 500 | `CHUNK_ERROR` | Failed to read uploaded chunks | Upload directory can't be listed (directory is left in place) |
+| 409 | `CHUNK_MISSING` | Expected N chunks but only received M. Please retry the upload. | Chunk count ≠ `total_chunks` |
+| 400 | `BAD_REQUEST` | File exceeds 100 MB limit | Assembled size > 110 MiB |
+| 400 | `UNSUPPORTED_FORMAT` | That file doesn't look like a supported audio format. Please upload an MP3, WAV, FLAC, or M4A. | Magic-byte check |
+| 500 | `INTERNAL` | … | Unhandled error (e.g. song insert), via `app.onError` |
+
+Also from global middleware: `413 payload_too_large` for a request body over 11 MiB, `429 too_many_requests`, and the shared auth rows.
 
 **Timeout:** 300 s (upload path).
 
@@ -2232,6 +2240,179 @@ const listQuery = z.object({
 | Status | Code | Message | Trigger |
 |--------|------|---------|---------|
 | 400 | `VALIDATION_ERROR` | … | Invalid query |
+
+---
+
+## `admin-drive-jobs.ts` — `/v1/admin/drive-jobs`
+
+Operator view of the `drive_jobs` queue: the background Drive copy / rename /
+deprecate work. What the jobs do, when they are enqueued, and the state machine
+are in [DRIVE.md](./DRIVE.md#drive_jobs-queue). Table: [`drive_jobs`](./SCHEMA.md#drive_jobs).
+
+`GET /` and `GET /summary` are both registered; `/summary` is a static segment and
+matches before the list route would ever see it.
+
+### GET /v1/admin/drive-jobs/summary
+
+**Auth:** requireAdmin
+
+**Purpose:** Queue health in one call — job counts by status, plus how many
+submissions still have no event copy.
+
+**Path params / Query params:** none
+
+**Request body:** none
+
+**Response:** **200**
+
+```json
+{
+  "data": {
+    "by_status": { "pending": 2, "done": 140, "failed": 1 },
+    "submissions_without_copy": 3
+  },
+  "meta": { "version": "…" }
+}
+```
+
+- `by_status` has a key only for statuses with at least one row (an empty table
+  gives `{}`); counts are integers.
+- `submissions_without_copy` counts every `event_song_submissions` row with a null
+  `drive_copy_file_id`, including ones whose copy is legitimately skipped (song
+  with no Drive file).
+
+**Errors:**
+
+| Status | Code | Message | Trigger |
+|--------|------|---------|---------|
+| 500 | `INTERNAL` | Internal server error | Query failed |
+
+---
+
+### GET /v1/admin/drive-jobs
+
+**Auth:** requireAdmin
+
+**Purpose:** Recent jobs, most recently updated first, with the last error.
+
+**Path params:** none
+
+**Query params:**
+
+```typescript
+const listQuery = z.object({
+  status: z.enum(["pending", "running", "done", "failed"]).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+```
+
+**Request body:** none
+
+**Response:** **200**
+
+```json
+{
+  "data": [
+    {
+      "id": "6f1c…",
+      "kind": "copy",
+      "status": "failed",
+      "attempts": 10,
+      "last_error": "Google Drive environment variables are not configured",
+      "next_attempt_at": 1759360000000,
+      "created_at": 1759349000000,
+      "updated_at": 1759358200000,
+      "submission_id": "sub_…",
+      "file_id": null,
+      "event_name": "Swingtacular 2027"
+    }
+  ],
+  "meta": { "version": "…", "count": 1 }
+}
+```
+
+- Ordered by `updated_at` descending, then truncated to `limit`.
+- `kind` is `copy` | `rename` | `trash`. `submission_id` is set for copy and rename,
+  `file_id` for trash.
+- `event_name` comes from a left join through the submission: `null` for trash
+  jobs and for jobs whose submission has since been deleted.
+- Timestamps are epoch ms. `next_attempt_at` keeps its last value after a job
+  reaches `done` or `failed` and means nothing there.
+
+**Errors:**
+
+| Status | Code | Message | Trigger |
+|--------|------|---------|---------|
+| 400 | `VALIDATION_ERROR` | … | Unknown `status`, `limit` outside 1–200 |
+| 500 | `INTERNAL` | Internal server error | Query failed |
+
+---
+
+### POST /v1/admin/drive-jobs/backfill-renames
+
+**Auth:** requireAdmin
+
+**Purpose:** Enqueue a `rename` job for every submission that has an event copy,
+re-applying the current naming rule. Run after any change to
+`resolveSubmissionFilename`. Safe to repeat: a rename whose name already matches
+makes no Drive write.
+
+**Path params / Query params:** none
+
+**Request body:** none (ignored)
+
+**Response:** **200**
+
+```json
+{ "data": { "enqueued": 42 }, "meta": { "version": "…" } }
+```
+
+Jobs are inserted one at a time, not in a transaction; a failure part-way returns
+500 with the earlier jobs already queued (harmless, since renames are idempotent).
+They run on later scheduler ticks, 10 per tick.
+
+**Errors:**
+
+| Status | Code | Message | Trigger |
+|--------|------|---------|---------|
+| 500 | `INTERNAL` | Internal server error | Select or insert failed |
+
+---
+
+### POST /v1/admin/drive-jobs/:id/retry
+
+**Auth:** requireAdmin
+
+**Purpose:** Return an exhausted (`failed`) job to the queue: `status = 'pending'`,
+`attempts = 0`, `next_attempt_at = updated_at = now`. `last_error` is kept until the
+next attempt overwrites or clears it.
+
+**Path params:** `id` — the job id
+
+**Query params:** none
+
+**Request body:** none (ignored)
+
+**Response:** **200** — the row as updated
+
+```json
+{ "data": { "id": "6f1c…", "status": "pending" }, "meta": { "version": "…" } }
+```
+
+The update repeats the `status = 'failed'` condition, so a concurrent change
+between the read and the write is reported as a conflict rather than overwritten.
+
+**Errors:**
+
+| Status | Code | Message | Trigger |
+|--------|------|---------|---------|
+| 404 | `NOT_FOUND` | Drive job not found | No row with that id |
+| 409 | `conflict` | Job is `<status>`, not failed — only exhausted jobs can be retried. | Job is `pending`, `running` or `done` (`<status>` is the actual value) |
+| 409 | `conflict` | Job changed state before it could be retried — re-check and try again. | Status changed between the read and the update |
+
+Unlike the other three routes this handler has no `try`/`catch`: a database error
+goes to `app.onError` (500 `INTERNAL`, reported to Sentry, with the raw error
+message outside production).
 
 ---
 

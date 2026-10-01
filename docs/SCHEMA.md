@@ -12,7 +12,7 @@ All time columns use Drizzle `bigint({ mode: "number" })` mapped to PostgreSQL `
 
 When writing raw SQL or ad-hoc queries, compare against numeric ms (e.g. `WHERE checkin_opens_at <= 1735689600000`) or convert explicitly. Do not pass ISO strings to bigint columns without conversion. Mixing types (`to_timestamp(ms/1000.0)` vs direct bigint compare) is a common source of off-by-timezone or off-by-unit bugs.
 
-Columns using this pattern: `created_at`, `updated_at`, `deleted_at` (where present), `checkin_opens_at`, `floor_trial_starts_at`, `floor_trial_ends_at`, `entered_queue_at`, `completed_at`.
+Columns using this pattern: `created_at`, `updated_at`, `deleted_at` (where present), `checkin_opens_at`, `floor_trial_starts_at`, `floor_trial_ends_at`, `entered_queue_at`, `completed_at`, `next_attempt_at`.
 
 ### Primary keys
 
@@ -53,7 +53,7 @@ Explicit overrides in `schema.ts`:
 | `session_status` | `scheduled`, `checkin_open`, `in_progress`, `completed`, `cancelled` |
 | `partner_role` | `leader`, `follower` |
 | `queue_type` | `priority`, `non_priority`, `active` |
-| `queue_event_action` | `checked_in`, `promoted_to_active`, `run_completed`, `run_incomplete_rotated`, `withdrawn` |
+| `queue_event_action` | `checked_in`, `promoted_to_active`, `run_completed`, `run_incomplete_rotated`, `withdrawn`, `moved_within_queue` (added in `0015`) |
 | `initial_queue` | `priority`, `non_priority` |
 
 **Removed enums** (present in early migrations, no longer in schema): `checkin_status`, `event_status`; old `queue_type` value `standard` was replaced by `non_priority` in migration `0003`.
@@ -294,6 +294,7 @@ Multi-day competition container.
 | `start_date` | `text` | NO | — | `YYYY-MM-DD` (validated in API) |
 | `end_date` | `text` | NO | — | `YYYY-MM-DD`; must be `>= start_date` |
 | `timezone` | `text` | NO | `America/Chicago` | IANA timezone; session timestamps displayed in this zone |
+| `season_year` | `text` | YES | — | Season the event belongs to (e.g. `"2027"`). Set on create from the body or derived from `start_date` (October 1 rollover); **not** recomputed when `start_date` changes. Migration `0013` backfilled existing rows. Reads fall back to deriving from `start_date` when null. Decides the Drive year folder for event copies |
 | `created_by` | `text` | YES | — | Admin who created the event |
 | `created_at` | `bigint` | NO | — | Epoch ms |
 | `updated_at` | `bigint` | NO | — | Epoch ms |
@@ -320,6 +321,9 @@ Links a song to an event so it can be used for check-in at that event.
 | `event_id` | `text` | NO | — | |
 | `song_id` | `text` | NO | — | |
 | `submitted_by_user_id` | `text` | NO | — | User who submitted the link |
+| `division` | `text` | YES | — | Division entered for this event. Null = use the song's division. Stored trimmed; an empty value is stored as null |
+| `round` | `text` | YES | — | `prelims_and_finals` \| `prelims_only` \| `finals_only` (plain text, not an enum). Null = `prelims_and_finals` |
+| `drive_copy_file_id` | `text` | YES | — | Drive id of the per-event copy. Null until the queued `copy` job succeeds (and stays null when the song has no Drive file). See [DRIVE.md](./DRIVE.md#drive_jobs-queue) |
 | `created_at` | `bigint` | NO | — | Epoch ms |
 
 **Primary key:** `id`
@@ -590,6 +594,33 @@ Append-only audit log of queue state transitions.
 **Relationships:** `sessions`, `checkins`, `users`
 
 **Gotchas:** No read API in v1; table exists for future audit/replay. ADR-004 lists intended action semantics.
+
+---
+
+### `drive_jobs`
+
+Durable queue of background Google Drive work: per-event copies of submitted songs, renames of those copies, and deprecation of copies whose submission was deleted. Drained by the scheduler tick. Behaviour, enqueue sites and the state machine: [DRIVE.md](./DRIVE.md#drive_jobs-queue).
+
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| `id` | `text` | NO | — | PK (UUID) |
+| `kind` | `text` | NO | — | `copy` \| `rename` \| `trash` (plain text, not an enum) |
+| `submission_id` | `text` | YES | — | Set for `copy` and `rename`. **Not a FK**: the job outlives a deleted submission |
+| `file_id` | `text` | YES | — | Set for `trash`: the Drive file to move to `_deprecated` |
+| `status` | `text` | NO | `'pending'` | `pending` \| `running` \| `done` \| `failed` (plain text) |
+| `attempts` | `integer` | NO | `0` | Failed attempts so far. Reset to 0 by the admin retry endpoint; not incremented by lease reclaim |
+| `next_attempt_at` | `bigint` | NO | — | Epoch ms; a `pending` job is claimable once this is `<= now` |
+| `last_error` | `text` | YES | — | Message of the most recent failure; cleared on success |
+| `created_at` | `bigint` | NO | — | Epoch ms |
+| `updated_at` | `bigint` | NO | — | Epoch ms. Doubles as the lease start while `running`: a `running` row older than 10 minutes is returned to `pending` |
+
+**Primary key:** `id`
+
+**Foreign keys:** none
+
+**Indexes:** `idx_drive_jobs_due` on `(status, next_attempt_at)` (the claim query), `idx_drive_jobs_submission_id` on `(submission_id)`
+
+**Gotchas:** Rows are never deleted; `done` jobs accumulate. Claimed with `FOR UPDATE SKIP LOCKED`, so concurrent replicas take disjoint batches. Added in migration `0012`, together with `event_song_submissions.drive_copy_file_id`.
 
 ---
 

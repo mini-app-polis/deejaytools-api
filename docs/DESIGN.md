@@ -18,14 +18,8 @@ D1 is a Workers-specific constraint. PostgreSQL on Railway is the ecosystem stan
 **Resource-oriented routes over session-nested routes**
 The old platform nested routes under sessions (e.g. `/api/sessions/:id/checkin`). The new platform uses flat resource routes (`/v1/checkins?session_id=`). More consistent, easier to extend, and cleaner for the frontend to reason about.
 
-**queue_type: 'standard' over 'non_priority'**
-The old platform used `non_priority` as the non-priority queue type value. Renamed to `standard` throughout — more intuitive and consistent with how the UI presents it.
-
-**queue_type supplied by caller**
-The old platform auto-determined queue type server-side based on division `is_priority` flag and completed run count. The new platform accepts `queue_type` from the caller and validates the `max_priority_runs` cap independently. Gives the frontend explicit control and makes the logic testable.
-
-**pair_id optional on checkin creation**
-`POST /v1/checkins` accepts either `pair_id` (explicit) or `partner_id` (find-or-create the pairs row server-side). Reduces frontend complexity — the caller doesn't need to manage pair IDs explicitly.
+**Queue model: superseded — see ADR-005**
+Earlier versions of this file recorded three decisions that no longer hold: a `standard` queue type (the value is `non_priority` again since migration `0003`), a caller-supplied `queue_type` (admission is decided server-side), and `pair_id` / `partner_id` on `POST /v1/checkins` (the body takes exactly one of `entityPairId`, `entitySoloUserId`, `entityManagedPartnershipId`). The as-built model is [ADR-005](./decisions/ADR-005-floor-trial-queue-model-as-built.md); request shapes are in [API.md](./API.md).
 
 ## Shared library
 
@@ -38,7 +32,7 @@ Generic cross-project utilities (structured logger, success/error envelopes, Cle
 Layer 1 (liveness): Railway auto-restart. Layer 2 (structured logs): `common-typescript-utils` logger emitting JSON with standard shape. Layer 3 (exceptions): Sentry capturing unhandled errors. Each layer covers a distinct failure mode.
 
 **Session status via in-process scheduler**
-Session status transitions (`scheduled` → `checkin_open` → `in_progress` → `completed`) and active-queue auto-fill are driven by `startScheduler()` in `index.ts` — an in-process `setInterval` loop (default 30 000 ms, configurable via `TICK_INTERVAL_MS`), disabled only when `DISABLE_SCHEDULER === "1"` (the exact string; `"true"` does **not** disable it). The loop has an overlap guard (`running` flag) and calls `handle.unref()` so it never keeps the process alive at shutdown. Each tick runs `tickSessionStatuses()` then `fillRunningSessions()` (via the shared `runTick()` helper).
+Session status transitions (`scheduled` → `checkin_open` → `in_progress` → `completed`) and active-queue auto-fill are driven by `startScheduler()` in `index.ts` — an in-process `setInterval` loop (default 30 000 ms, configurable via `TICK_INTERVAL_MS`), disabled only when `DISABLE_SCHEDULER === "1"` (the exact string; `"true"` does **not** disable it). The loop has an overlap guard (`running` flag) and calls `handle.unref()` so it never keeps the process alive at shutdown. Each tick runs `tickSessionStatuses()` then `fillRunningSessions()`, then drains one batch of the Drive job queue with `processDriveJobs()` (all via the shared `runTick()` helper). Session work and Drive work sit in separate `try` blocks, so a persistent failure in one never stops the other. The Drive queue is specified in [DRIVE.md](./DRIVE.md#drive_jobs-queue).
 
 `tickSessionStatuses()` advances **one step per session per tick**, so a dormant session that needs to walk the full chain can take up to three ticks to reach `completed`. The persisted DB status is updated for side effects, but **clients never see it directly**: `deriveSessionStatus()` in `routes/sessions.ts` recomputes status from the wall clock on every response, so a lagging or disabled scheduler never shows a wrong status in the UI. `cancelled` is a manual admin override and is preserved by both paths.
 
@@ -51,16 +45,21 @@ Multi-replica safety: `tickSessionStatuses()` is idempotent, and `fillActiveQueu
 **Partner dance role on the partner record, not the user**
 Each partner relationship has a `partner_role` field (`leader` | `follower`) representing the partner's role. The uploading user's role is always the opposite. This allows the same user to be a leader with one partner and a follower with another. The role lives on the partner record rather than the user because it varies per relationship.
 
-**Filename ordering: always leader_follower**
-Processed filenames always put the leader name first regardless of who uploaded the song. The server resolves ordering at upload time based on `partner_role`: if the partner is a follower, the uploading user is the leader (user name first); if the partner is a leader, the uploading user is the follower (partner name first). Solo uploads use the user name only.
+**Filename ordering: leader first, except ProAm FollowerAm**
+Processed filenames put the leader name first regardless of who uploaded the song. The server resolves ordering at upload time based on `partner_role`: if the partner is a follower, the uploading user is the leader (user name first); if the partner is a leader, the uploading user is the follower (partner name first). Solo, team and other uploads use one name. In the `ProAm FollowerAm` division the follower (the amateur) is named first instead. The title tag uses the same order.
 
-Format: `{leader}_{follower}_{division}_{seasonYear}_{routineName}_{descriptor}_v{N}.{ext}`
+Format: `{first}_{second}_{division}_{seasonYear}_{routineName}_{descriptor}_v{NN}.{ext}`. The full rules (sanitizing, versioning, extensions) are in [DRIVE.md](./DRIVE.md#background-build-buildanduploadsong).
 
-**Two-step atomic upload pattern**
-Song creation is split into two API calls: `POST /v1/songs` (JSON metadata, creates the DB record) and `POST /v1/songs/:id/upload` (multipart file, tags and uploads to Drive, updates the record). The frontend orchestrates both as a single atomic operation — if the upload fails after the record is created, the frontend deletes the record automatically. This keeps the API clean while giving the user a single-step experience.
+**Chunked upload, Drive work in the background**
+Songs are uploaded through one endpoint, `POST /v1/songs/upload/chunk`, in chunks of up to 10 MB (at most 30). Chunks are staged on local disk; nothing touches the database until the final chunk arrives. That request reassembles the file, checks its format by magic bytes, inserts the song row and **responds immediately**. Tagging, the Drive upload and sharing then run in the background, because a large Drive upload (30–120 s) held the request open long enough for clients to drop it. If the background work fails, the server deletes the song row; the user sees the song disappear and retries.
+
+The trade-off: the row briefly exists without Drive fields, and a process restart mid-upload leaves it that way. (`POST /v1/songs` still exists for metadata-only rows; there is no `/v1/songs/:id/upload` route.) Details: [DRIVE.md](./DRIVE.md#upload-pipeline).
+
+**Event copies through a durable job queue**
+Submitting a song to an event copies its file into that event's Drive folder, and removing the submission deprecates the copy. These are queued as `drive_jobs` rows and run by the scheduler tick with retry and backoff, not inline: a Drive outage during the pre-event submission rush must not fail or slow submissions, and a copy must survive a deploy mid-flight. See [DRIVE.md](./DRIVE.md#drive_jobs-queue).
 
 **Per-format audio tagging**
-ID3 tags (via `node-id3`) for MP3 and WAV. Vorbis comments (via `flac-tagger`) for FLAC. iTunes-style ilst atoms (manual Buffer manipulation) for m4a. All other formats pass through untagged. Each format preserves existing tags in a comment field as `prev[title=...,artist=...]` before overwriting.
+ID3v2.3 for MP3 (via `node-id3`) and for WAV (an `id3 ` RIFF chunk). Vorbis comments (via `flac-tagger`) for FLAC. iTunes-style `ilst` atoms (hand-written parser) for m4a. Every file gets title (the entity), artist (`division | routine`), genre `_Routine_` and the season year; whatever title/artist/album the file arrived with is kept in the comment as `title=…,artist=…,album=…`. Tagging never fails an upload: anything it can't handle goes through untagged. The field-level spec is [AUDIO-TAGGING.md](./AUDIO-TAGGING.md).
 
 **Divisions list hardcoded**
 The 15 WCS divisions are hardcoded in the frontend. Admin-configurable divisions are deferred — when the floor trial UX is revisited, a divisions management UI should be part of that pass since session divisions and song divisions share the same list.

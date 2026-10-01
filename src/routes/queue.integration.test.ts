@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runTick } from "../services/scheduler.js";
-import { actor, db, eventDates, seedSong } from "../test/integration/harness.js";
+import { actor, eventDates, seedSong, tick } from "../test/integration/harness.js";
 
 const DIVISION = "Classic";
 
@@ -93,7 +92,7 @@ describe("queue management (integration)", () => {
     expect(
       (await admin.patch(`/v1/sessions/${sessionId}`, { active_priority_max: 2, active_non_priority_max: 2 })).status
     ).toBe(200);
-    await runTick(db);
+    await tick();
     expect(leaders(await active())).toEqual(["A", "B"]);
 
     const [a] = await active();
@@ -145,7 +144,7 @@ describe("queue management (integration)", () => {
     const bob = await actor("bob");
     expect((await bob.del(`/v1/checkins/${checkinId}`)).status).toBe(403);
     expect((await alice.del(`/v1/checkins/${checkinId}`)).status).toBe(200);
-    await runTick(db);
+    await tick();
     expect((await admin.get(`/v1/queue/${session.body.data.id}/waiting`)).body.data).toEqual([]);
   });
 });

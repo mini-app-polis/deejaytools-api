@@ -171,7 +171,7 @@ Calls the fleet's shared `mini-app-polis/.github/.github/workflows/evaluate.yml@
 | `PORT` | Auto | Injected by Railway; do not hardcode in production or set it in Doppler. |
 | `NODE_ENV` | Auto / set | Typically `production` on Railway. |
 | `SENTRY_DSN_DEEJAYTOOLS_API` | Optional | Enables API Sentry when set. Legacy: `SENTRY_DSN`. |
-| `BREVO_API_KEY` | Optional | Feedback email via Brevo; when unset, feedback still returns 201. |
+| `DEEJAYTOOLS_BREVO_API_KEY` | Optional | Legacy: `BREVO_API_KEY`. Feedback email via Brevo; when unset, feedback still returns 201. |
 | `TICK_SECRET` | Optional | When **defined** (even `""`), `GET /internal/tick` requires matching `x-tick-secret`. When **unset**, endpoint is **completely open**. |
 | `TICK_INTERVAL_MS` | Optional | Scheduler interval ms (default `30000`). |
 | `DISABLE_SCHEDULER` | Optional | Only the literal string `"1"` disables the in-process scheduler. |

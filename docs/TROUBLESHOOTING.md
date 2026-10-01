@@ -216,17 +216,17 @@ Production on Railway uses the injected `PORT` — this error is almost always l
 
 **Symptom:** User sees success on `/feedback`; API returns **201**; nothing in inbox.
 
-**Cause:** `BREVO_API_KEY` is unset. Handler logs:
+**Cause:** `DEEJAYTOOLS_BREVO_API_KEY` is unset. Handler logs:
 
 ```
-[feedback] BREVO_API_KEY not set; skipping transactional email
+[feedback] DEEJAYTOOLS_BREVO_API_KEY not set; skipping transactional email
 ```
 
 and still returns success — **by design**, invisible to the user.
 
 **Fix:**
 
-1. Set `BREVO_API_KEY` on Railway (Brevo → SMTP & API → API Keys).
+1. Set `DEEJAYTOOLS_BREVO_API_KEY` on Railway (Brevo → SMTP & API → API Keys).
 2. Redeploy.
 3. Submit test feedback; if Brevo rejects, API returns **502** `Failed to send email. Please try again.` and logs `[feedback] Brevo error:`.
 
@@ -312,7 +312,7 @@ and still returns success — **by design**, invisible to the user.
 
 **Symptom:** Feedback form error; API **502**, code `EMAIL_FAILED`.
 
-**Cause:** `BREVO_API_KEY` is set but Brevo API rejected the send. Check Railway logs for `[feedback] Brevo error:` with status and body.
+**Cause:** `DEEJAYTOOLS_BREVO_API_KEY` is set but Brevo API rejected the send. Check Railway logs for `[feedback] Brevo error:` with status and body.
 
 **Fix:** Verify Brevo API key, sender domain verification, and recipient limits in Brevo dashboard.
 

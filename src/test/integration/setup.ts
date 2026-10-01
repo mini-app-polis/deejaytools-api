@@ -11,6 +11,7 @@ process.env.DEEJAYTOOLS_CLERK_ISSUER = TEST_ISSUER;
 process.env.DEEJAYTOOLS_CLERK_JWKS_URL = await startClerk();
 delete process.env.TICK_SECRET;
 // Feedback emails through Brevo only when a key is set; never from tests.
+delete process.env.DEEJAYTOOLS_BREVO_API_KEY;
 delete process.env.BREVO_API_KEY;
 
 // CI has no Google Drive. The upload and share calls are wrapped so a test

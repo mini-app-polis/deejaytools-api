@@ -116,9 +116,9 @@ read as a fallback. Required at runtime:
 - `DISABLE_SCHEDULER` — optional; disables the in-process scheduler only when
   set to exactly `"1"`. Other truthy strings (including `"true"`) do **not**
   disable it.
-- `BREVO_API_KEY` — optional; Brevo transactional email for feedback
+- `DEEJAYTOOLS_BREVO_API_KEY` — optional (legacy: `BREVO_API_KEY`); Brevo transactional email for feedback
   submissions (`routes/feedback.ts`). When unset the API logs
-  `[feedback] BREVO_API_KEY not set; skipping transactional email` and still
+  `[feedback] DEEJAYTOOLS_BREVO_API_KEY not set; skipping transactional email` and still
   returns 201 success, so a missing key is invisible to the user.
 - `RAILWAY_DEPLOYMENT_ID`, `npm_package_version` — read by `instrument.ts` for
   the Sentry release tag; platform-injected on Railway, not set locally.

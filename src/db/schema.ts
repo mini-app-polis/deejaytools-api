@@ -431,9 +431,9 @@ export const driveJobs = pgTable(
   "drive_jobs",
   {
     id: text("id").primaryKey(),
-    /** 'copy' | 'trash' */
+    /** 'copy' | 'rename' | 'trash' */
     kind: text("kind").notNull(),
-    /** Set for kind='copy'. Not a FK: the job outlives a deleted submission. */
+    /** Set for kind='copy' and kind='rename'. Not a FK: the job outlives a deleted submission. */
     submissionId: text("submission_id"),
     /** Set for kind='trash' — the Drive file to deprecate. */
     fileId: text("file_id"),

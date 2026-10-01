@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { shareDriveFileWithUsers, uploadSongToDrive } from "../services/drive.js";
-import { actor, request, type Actor } from "../test/integration/harness.js";
+import { actor, overHttp, request, type Actor } from "../test/integration/harness.js";
 
 /**
  * The chunked song upload, end to end through the API: multipart parsing,
@@ -11,6 +11,10 @@ import { actor, request, type Actor } from "../test/integration/harness.js";
  * are stand-ins (set up in test/integration/setup.ts) that record what
  * they were handed. The live contract suite
  * (deejaytools-com) uploads to the real Drive on dev.
+ *
+ * Over HTTP (INTEGRATION_BASE_URL) the stand-ins cannot reach the target, so
+ * the success-path test is skipped; the others hold because a target run
+ * without Drive credentials fails every Drive call for real.
  */
 // The Drive calls are vi.fn wrappers set up in test/integration/setup.ts.
 const upload = vi.mocked(uploadSongToDrive);
@@ -61,7 +65,7 @@ async function eventually<T>(read: () => Promise<T>, done: (v: T) => boolean): P
 }
 
 describe("song upload (integration)", () => {
-  it("reassembles chunks sent out of order, uploads the tagged file, and records where it went", async () => {
+  it.skipIf(overHttp)("reassembles chunks sent out of order, uploads the tagged file, and records where it went", async () => {
     upload.mockResolvedValue({ fileId: "drive-file-1", folderId: "drive-folder-1" });
     share.mockResolvedValue({ shared: [], failed: [] } as never);
     const alice = await actor("alice");

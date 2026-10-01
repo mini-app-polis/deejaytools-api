@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runTick } from "../services/scheduler.js";
-import { actor, db, eventDates, seedSong, type Actor } from "../test/integration/harness.js";
+import { actor, eventDates, seedSong, tick, type Actor } from "../test/integration/harness.js";
 
 const DIVISION = "Classic";
 
@@ -68,14 +67,14 @@ describe("floor trial (integration)", () => {
     ]);
 
     // No slots open: a tick moves nobody.
-    await runTick(db);
+    await tick();
     expect((await admin.get(`/v1/queue/${sessionId}/active`)).body.data).toEqual([]);
 
     // One slot opens: the first to check in goes on.
     expect(
       (await admin.patch(`/v1/sessions/${sessionId}`, { active_priority_max: 1, active_non_priority_max: 1 })).status
     ).toBe(200);
-    await runTick(db);
+    await tick();
     const active = await admin.get(`/v1/queue/${sessionId}/active`);
     expect(active.body.data).toHaveLength(1);
     expect(active.body.data[0].entityPairId).toBe(alice.pairId);
@@ -88,7 +87,7 @@ describe("floor trial (integration)", () => {
     expect(runs.body.data).toHaveLength(1);
 
     // Completing frees the slot; the next tick brings on the next dancer.
-    await runTick(db);
+    await tick();
     const next = await admin.get(`/v1/queue/${sessionId}/active`);
     expect(next.body.data.map((e: { entityPairId: string }) => e.entityPairId)).toEqual([bob.pairId]);
   });

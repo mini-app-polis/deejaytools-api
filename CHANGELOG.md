@@ -1,3 +1,11 @@
+# [1.2.0](https://github.com/mini-app-polis/deejaytools-api/compare/v1.1.5...v1.2.0) (2026-10-01)
+
+
+### Features
+
+* read DEEJAYTOOLS_-prefixed env vars for the shared ecosystem Doppler config ([55cfdf5](https://github.com/mini-app-polis/deejaytools-api/commit/55cfdf5392e8a10d0a4660ecff04e011d5334a0f))
+* read DEEJAYTOOLS_-prefixed env vars for the shared ecosystem Doppler config ([5568fe6](https://github.com/mini-app-polis/deejaytools-api/commit/5568fe60fb99e0c8496ec0be3780e65de0a1e73a))
+
 ## [1.1.5](https://github.com/mini-app-polis/deejaytools-api/compare/v1.1.4...v1.1.5) (2026-09-30)
 
 

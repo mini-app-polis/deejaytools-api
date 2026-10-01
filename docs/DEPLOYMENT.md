@@ -161,16 +161,16 @@ Calls the fleet's shared `mini-app-polis/.github/.github/workflows/evaluate.yml@
 
 | Variable | Required | Notes |
 |----------|----------|-------|
-| `DATABASE_URL` | **Yes** | Postgres connection string (Railway Postgres plugin or external). |
-| `CLERK_JWKS_URL` | **Yes** | Clerk JWKS URL for JWT verification. |
-| `CLERK_ISSUER` | **Yes** | Issuer the token's `iss` must equal (`https://clerk.deejaytools.com`); stated by Clerk's `/.well-known/openid-configuration`. Unset → every authenticated request is rejected. |
-| `CORS_ORIGINS` | **Yes** | Comma-separated browser origins (e.g. `https://deejaytools.com,https://www.deejaytools.com`). |
+| `DEEJAYTOOLS_DATABASE_URL` | **Yes** | Postgres connection string (Railway Postgres plugin or external). Legacy: `DATABASE_URL`. |
+| `DEEJAYTOOLS_CLERK_JWKS_URL` | **Yes** | Clerk JWKS URL for JWT verification. Legacy: `CLERK_JWKS_URL`. |
+| `DEEJAYTOOLS_CLERK_ISSUER` | **Yes** | Legacy: `CLERK_ISSUER`. Issuer the token's `iss` must equal (`https://clerk.deejaytools.com`); stated by Clerk's `/.well-known/openid-configuration`. Unset → every authenticated request is rejected. |
+| `DEEJAYTOOLS_CORS_ORIGINS` | **Yes** | Legacy: `CORS_ORIGINS`. Comma-separated browser origins (e.g. `https://deejaytools.com,https://www.deejaytools.com`). |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | **Yes** (for uploads) | Drive service account client email. |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | **Yes** (for uploads) | PEM private key; use `\n` escapes in the env var — code unescapes with `.replace(/\\n/g, "\n")`. |
 | `GOOGLE_DRIVE_PARENT_FOLDER_ID` | **Yes** (for uploads) | Root Drive folder ID; folder must be **shared with the service account**. |
-| `PORT` | Auto | Injected by Railway; do not hardcode in production. |
+| `PORT` | Auto | Injected by Railway; do not hardcode in production or set it in Doppler. |
 | `NODE_ENV` | Auto / set | Typically `production` on Railway. |
-| `SENTRY_DSN` | Optional | Enables API Sentry when set. |
+| `SENTRY_DSN_DEEJAYTOOLS_API` | Optional | Enables API Sentry when set. Legacy: `SENTRY_DSN`. |
 | `BREVO_API_KEY` | Optional | Feedback email via Brevo; when unset, feedback still returns 201. |
 | `TICK_SECRET` | Optional | When **defined** (even `""`), `GET /internal/tick` requires matching `x-tick-secret`. When **unset**, endpoint is **completely open**. |
 | `TICK_INTERVAL_MS` | Optional | Scheduler interval ms (default `30000`). |
@@ -195,10 +195,10 @@ Do these **in order**:
 1. **Postgres** — Provision a database; note the connection string.
 2. **Clerk** — Create/configure a Clerk application; note the JWKS URL.
 3. **Google Drive** — Create a service account, enable Drive API, download key, create/share parent folder with the service account email.
-4. **Railway service** — Connect this repo; ensure `railway.json` is picked up; set env vars (`DATABASE_URL`, `CLERK_JWKS_URL`, `CLERK_ISSUER`, `CORS_ORIGINS`, Google vars, optional Sentry/Brevo/TICK_*).
+4. **Railway service** — Connect this repo; ensure `railway.json` is picked up; set env vars (`DEEJAYTOOLS_DATABASE_URL`, `DEEJAYTOOLS_CLERK_JWKS_URL`, `DEEJAYTOOLS_CLERK_ISSUER`, `DEEJAYTOOLS_CORS_ORIGINS`, Google vars, optional Sentry/Brevo/TICK_*).
 5. **First deploy** — Push to the connected branch. Build runs `pnpm build`; start runs **migrate then start**. Confirm `GET /health` returns `{ "status": "ok" }`.
 6. **Note the public API URL** — Railway-generated hostname or custom domain; the web app's `VITE_API_URL` points here.
-7. **CORS** — Add the web app's Pages URL (and custom domain) to `CORS_ORIGINS`; redeploy if needed.
+7. **CORS** — Add the web app's Pages URL (and custom domain) to `DEEJAYTOOLS_CORS_ORIGINS`; redeploy if needed.
 8. **Scheduler** — In Railway logs, grep for `scheduler_started`. Optionally hit `GET /internal/tick` with `x-tick-secret` if `TICK_SECRET` is set.
 9. **Sentry** — Optionally confirm a test error arrives and the release is tagged.
 

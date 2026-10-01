@@ -90,13 +90,15 @@ and is exempted in `evaluator.yaml`. See
 
 ## Environment variables
 
-See `.env.example` for the complete list. Required at
-runtime:
+See `.env.example` for the complete list. The four `DEEJAYTOOLS_`-prefixed
+variables and `SENTRY_DSN_DEEJAYTOOLS_API` live in the shared ecosystem Doppler
+config, so they carry the service's name; the unprefixed legacy names are still
+read as a fallback. Required at runtime:
 
-- `DATABASE_URL` — Postgres connection string.
-- `CLERK_JWKS_URL` — Clerk public key endpoint for JWT verification.
-- `CLERK_ISSUER` — the issuer every session JWT must carry in `iss` (`https://clerk.deejaytools.com` in production).
-- `CORS_ORIGINS` — comma-separated allowed origins.
+- `DEEJAYTOOLS_DATABASE_URL` — Postgres connection string (legacy: `DATABASE_URL`).
+- `DEEJAYTOOLS_CLERK_JWKS_URL` — Clerk public key endpoint for JWT verification (legacy: `CLERK_JWKS_URL`).
+- `DEEJAYTOOLS_CLERK_ISSUER` — the issuer every session JWT must carry in `iss` (`https://clerk.deejaytools.com` in production; legacy: `CLERK_ISSUER`).
+- `DEEJAYTOOLS_CORS_ORIGINS` — comma-separated allowed origins (legacy: `CORS_ORIGINS`).
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL` — service account email for Drive uploads.
 - `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` — PEM private key (escape newlines as `\n` in env).
 - `GOOGLE_DRIVE_PARENT_FOLDER_ID` — Drive folder ID shared with the service account.
@@ -104,7 +106,7 @@ runtime:
 - `DB_POOL_MAX` — optional; maximum Postgres connections in the pool (default: `20`). Set below your Railway plan's connection limit to leave headroom for other services.
 - `DB_CONNECT_TIMEOUT` — optional; seconds to wait when opening a new connection before giving up (default: `10`).
 - `DB_IDLE_TIMEOUT` — optional; seconds an idle connection is kept open before being released (default: `30`).
-- `SENTRY_DSN` — optional; Sentry is enabled when set.
+- `SENTRY_DSN_DEEJAYTOOLS_API` — optional; Sentry is enabled when set (legacy: `SENTRY_DSN`).
 - `TICK_SECRET` — optional; when **defined** (including as an empty string),
   `GET /internal/tick` requires header `x-tick-secret` to match. When **unset**,
   the endpoint is completely open — a deployment warning.

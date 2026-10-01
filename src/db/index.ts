@@ -5,9 +5,13 @@ import * as schema from "./schema.js";
 
 const logger = createLogger("deejaytools-api");
 
-const url = process.env.DATABASE_URL;
+// DEEJAYTOOLS_DATABASE_URL is the name in the shared ecosystem Doppler
+// config, where a bare DATABASE_URL would collide with api-kaianolevine-com's.
+// DATABASE_URL is the legacy name (and what CI sets). The integration guard in
+// src/test/integration/database-url.ts must resolve in the same order.
+const url = process.env.DEEJAYTOOLS_DATABASE_URL || process.env.DATABASE_URL;
 if (!url) {
-  throw new Error("DATABASE_URL is required");
+  throw new Error("DEEJAYTOOLS_DATABASE_URL (or DATABASE_URL) is required");
 }
 
 const poolMax = Number(process.env.DB_POOL_MAX ?? "20");

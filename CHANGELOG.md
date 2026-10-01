@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/mini-app-polis/deejaytools-api/compare/v1.2.0...v1.2.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **deps:** bump the majors group with 2 updates ([bcac051](https://github.com/mini-app-polis/deejaytools-api/commit/bcac0513778ab8d015aecddb8630a73d8d5036bf))
+
 # [1.2.0](https://github.com/mini-app-polis/deejaytools-api/compare/v1.1.5...v1.2.0) (2026-10-01)
 
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Sentry from "@sentry/node";
 import * as drive from "../services/drive.js";
 import * as tagger from "../services/tagger.js";
@@ -536,6 +536,12 @@ describe("DELETE /v1/songs/:id", () => {
 
 describe("POST /v1/songs/upload/chunk", () => {
   beforeEach(() => {
+    // The season year comes from the upload time and rolls over on October 1
+    // (lib/seasonYear.ts). Pin the clock mid-season so the 2026 expectations
+    // below hold whatever day the suite runs; only Date is faked, so timers
+    // still run. The October test sets its own time.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-06-15T12:00:00Z"));
     resetSelectQueue();
     vi.mocked(drive.uploadSongToDrive).mockClear();
     vi.mocked(drive.softDeleteOnDrive).mockClear();
@@ -544,6 +550,10 @@ describe("POST /v1/songs/upload/chunk", () => {
     // sweepStaleTmpDirs will also call readdir; stat returns epoch (old) so rm fires — that's fine.
     mockFs.readdir.mockResolvedValue(["chunk_000000"]);
     mockFs.readFile.mockImplementation(() => Promise.resolve(MOCK_MP3_CHUNK_BYTES));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   // --- auth & basic validation ---

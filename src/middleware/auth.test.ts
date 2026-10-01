@@ -48,23 +48,32 @@ describe("bearerToken", () => {
 });
 
 describe("jwksUrl", () => {
-  let original: string | undefined;
+  const NAMES = ["DEEJAYTOOLS_CLERK_JWKS_URL", "CLERK_JWKS_URL"] as const;
+  let original: Record<string, string | undefined>;
   beforeEach(() => {
-    original = process.env.CLERK_JWKS_URL;
+    original = Object.fromEntries(NAMES.map((n) => [n, process.env[n]]));
+    for (const n of NAMES) delete process.env[n];
   });
   afterEach(() => {
-    if (original === undefined) delete process.env.CLERK_JWKS_URL;
-    else process.env.CLERK_JWKS_URL = original;
+    for (const n of NAMES) {
+      if (original[n] === undefined) delete process.env[n];
+      else process.env[n] = original[n];
+    }
   });
 
-  it("returns the env var when set", () => {
+  it("returns DEEJAYTOOLS_CLERK_JWKS_URL when set", () => {
+    process.env.DEEJAYTOOLS_CLERK_JWKS_URL = "https://clerk.example/.well-known/jwks.json";
+    process.env.CLERK_JWKS_URL = "https://other.example/.well-known/jwks.json";
+    expect(jwksUrl()).toBe("https://clerk.example/.well-known/jwks.json");
+  });
+
+  it("falls back to the legacy CLERK_JWKS_URL", () => {
     process.env.CLERK_JWKS_URL = "https://clerk.example/.well-known/jwks.json";
     expect(jwksUrl()).toBe("https://clerk.example/.well-known/jwks.json");
   });
 
-  it("throws when the env var is missing", () => {
-    delete process.env.CLERK_JWKS_URL;
-    expect(() => jwksUrl()).toThrow(/CLERK_JWKS_URL/);
+  it("throws when neither env var is set", () => {
+    expect(() => jwksUrl()).toThrow(/DEEJAYTOOLS_CLERK_JWKS_URL/);
   });
 });
 

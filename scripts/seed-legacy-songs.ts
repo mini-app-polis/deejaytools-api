@@ -57,8 +57,8 @@ async function main() {
     process.exit(1);
   }
 
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is required");
+  const url = process.env.DEEJAYTOOLS_DATABASE_URL || process.env.DATABASE_URL;
+  if (!url) throw new Error("DEEJAYTOOLS_DATABASE_URL (or DATABASE_URL) is required");
 
   const client = postgres(url, { max: 3 });
   const db = drizzle(client, { logger: false });

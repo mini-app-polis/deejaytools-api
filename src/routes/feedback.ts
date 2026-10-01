@@ -66,7 +66,10 @@ Submitted: ${submittedAt}
 ═══════════════════════════════
 `.trim();
 
-  const brevoKey = process.env.BREVO_API_KEY;
+  // DEEJAYTOOLS_BREVO_API_KEY is the name in the shared ecosystem Doppler
+  // config, where BREVO_API_KEY is api-kaianolevine-com's (a different
+  // account). BREVO_API_KEY is the legacy name, read until removed there.
+  const brevoKey = process.env.DEEJAYTOOLS_BREVO_API_KEY || process.env.BREVO_API_KEY;
   if (brevoKey) {
     const payload: Record<string, unknown> = {
       sender: { name: "DeejayTools Feedback", email: "kaiano@kaianolevine.com" },
@@ -103,7 +106,7 @@ Submitted: ${submittedAt}
       );
     }
   } else {
-    console.warn("[feedback] BREVO_API_KEY not set; skipping transactional email");
+    console.warn("[feedback] DEEJAYTOOLS_BREVO_API_KEY not set; skipping transactional email");
   }
 
   return c.json(success(null), 201);

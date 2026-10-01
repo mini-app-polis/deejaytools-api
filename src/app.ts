@@ -36,8 +36,11 @@ const logger = createLogger("deejaytools-api");
 
 export const app = new Hono();
 
+// DEEJAYTOOLS_CORS_ORIGINS is the name in the shared ecosystem Doppler
+// config; CORS_ORIGINS is the legacy name, read until it is removed there.
 const origins =
-  process.env.CORS_ORIGINS?.split(",")
+  (process.env.DEEJAYTOOLS_CORS_ORIGINS || process.env.CORS_ORIGINS)
+    ?.split(",")
     .map((s) => s.trim())
     .filter(Boolean) ?? ["http://localhost:5173"];
 

@@ -11,10 +11,15 @@
  */
 import * as Sentry from "@sentry/node";
 
+// SENTRY_DSN_DEEJAYTOOLS_API is the name in the shared ecosystem Doppler
+// config, where SENTRY_DSN belongs to the cogs. SENTRY_DSN is the legacy
+// name, read until it is removed there.
+const dsn = process.env.SENTRY_DSN_DEEJAYTOOLS_API || process.env.SENTRY_DSN;
+
 Sentry.init({
-  dsn: process.env.SENTRY_DSN,
+  dsn,
   environment: process.env.NODE_ENV ?? "development",
-  enabled: !!process.env.SENTRY_DSN,
+  enabled: !!dsn,
   release:
     process.env.RAILWAY_DEPLOYMENT_ID ??
     process.env.npm_package_version,

@@ -26,9 +26,12 @@ declare module "hono" {
   }
 }
 
+// The DEEJAYTOOLS_ names are the ones in the shared ecosystem Doppler
+// config, which also holds the other Clerk tenant's CLERK_* values. The bare
+// names are legacy, read until they are removed there.
 export function jwksUrl(): string {
-  const url = process.env.CLERK_JWKS_URL;
-  if (!url) throw new Error("CLERK_JWKS_URL is required");
+  const url = process.env.DEEJAYTOOLS_CLERK_JWKS_URL || process.env.CLERK_JWKS_URL;
+  if (!url) throw new Error("DEEJAYTOOLS_CLERK_JWKS_URL (or CLERK_JWKS_URL) is required");
   return url;
 }
 
@@ -38,8 +41,8 @@ export function jwksUrl(): string {
  * instance issued it.
  */
 export function clerkIssuer(): string {
-  const issuer = process.env.CLERK_ISSUER;
-  if (!issuer) throw new Error("CLERK_ISSUER is required");
+  const issuer = process.env.DEEJAYTOOLS_CLERK_ISSUER || process.env.CLERK_ISSUER;
+  if (!issuer) throw new Error("DEEJAYTOOLS_CLERK_ISSUER (or CLERK_ISSUER) is required");
   return issuer;
 }
 

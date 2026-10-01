@@ -2011,7 +2011,7 @@ Song object in responses:
 
 **Auth:** public
 
-**Purpose:** Submit site feedback (optional Brevo email when `BREVO_API_KEY` set).
+**Purpose:** Submit site feedback (optional Brevo email when `DEEJAYTOOLS_BREVO_API_KEY` set).
 
 **Path params / Query params:** none
 
@@ -2056,7 +2056,7 @@ const feedbackBodySchema = z
 | 400 | `VALIDATION_ERROR` | … | Invalid body / screenshot format |
 | 502 | `EMAIL_FAILED` | Failed to send email. Please try again. | Brevo API error |
 
-If `BREVO_API_KEY` is unset, feedback is logged and **201** still returned.
+If `DEEJAYTOOLS_BREVO_API_KEY` is unset, feedback is logged and **201** still returned.
 
 ---
 

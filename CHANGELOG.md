@@ -1,3 +1,10 @@
+## [1.2.2](https://github.com/mini-app-polis/deejaytools-api/compare/v1.2.1...v1.2.2) (2026-10-02)
+
+
+### Bug Fixes
+
+* **tagger:** keep WAV audio when a chunk's declared size overruns the file ([f22e68d](https://github.com/mini-app-polis/deejaytools-api/commit/f22e68d4028643cca8a545e88305a029a0f6ebf8))
+
 ## [1.2.1](https://github.com/mini-app-polis/deejaytools-api/compare/v1.2.0...v1.2.1) (2026-10-01)
 
 

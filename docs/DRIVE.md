@@ -201,6 +201,14 @@ except the `500 CHUNK_ERROR` return when the directory can't be listed.
 9. **Update the song row:** `original_filename`, `processed_filename`,
    `season_year`, `drive_file_id`, `drive_folder_id` (the division folder),
    `updated_at`.
+10. **Re-queue event copies:** enqueue a `copy` job for every submission of this
+    song whose `drive_copy_file_id` is still null. The song is usable before its
+    file exists, so a submission made during steps 1–9 may already have had its
+    copy job run and find nothing to copy (see `copy` step 3). If that submission's
+    first job is still pending, it just gets a second one, which does nothing once
+    the first has recorded the copy. Best-effort: a failure logs
+    `drive_copy_requeue_failed`, goes to Sentry (`stage: "requeue"`), and does
+    **not** count as a failed build.
 
 **Failure:** any throw from steps 1–9 logs `song_background_upload_failed` and
 hard-deletes the song row. If that delete fails it logs
@@ -258,6 +266,7 @@ Table: [`drive_jobs`](./SCHEMA.md#drive_jobs). Admin endpoints:
 |-------|--------|------|
 | `POST /v1/event-song-submissions` succeeds | `copy` for the new submission | After the insert |
 | `DELETE /v1/event-song-submissions/:id` | `trash` for its `drive_copy_file_id`, if set | After the delete |
+| Background build of an upload finishes | `copy` for each of the song's submissions still without a copy | After the song row gets its Drive fields ([step 10](#background-build-buildanduploadsong)) |
 | `DELETE /v1/songs/:id` | `trash` per copy of each of the song's submissions | After the transaction commits |
 | `DELETE /v1/managed-partnerships/:id` | `trash` per copy of each submission of the partnership's live songs | After the transaction commits |
 | `DELETE /v1/events/:id` | `trash` per copy of each of the event's submissions | After the transaction commits |
@@ -376,8 +385,8 @@ propagate as job failures.
    against two runs at once, or a failure between the copy and step 7 (the retry
    copies again).
 3. Song has no `drive_file_id` → logs `drive_copy_skipped_no_source` (warn) and
-   succeeds. Correct for legacy rows. **Wrong for an upload whose background build
-   hasn't finished**: see [Known defects](#known-defects).
+   succeeds. For an upload whose background build hasn't finished, step 10 of the
+   build queues the copy again once the file exists.
 4. Filename = `resolveSubmissionFilename`: the song's `processed_filename`, else
    `original_filename`, else the song id (each trimmed). Events whose name
    normalises to start with `theopen` have their own branch, which today returns
@@ -424,7 +433,6 @@ Drive and the database out of step without an error anyone sees.
 
 | Defect | Effect | Where |
 |--------|--------|-------|
-| A copy job for a song whose background upload hasn't finished is marked `done` without copying | A song submitted to an event within ~30–120 s of uploading never gets its event copy; nothing re-enqueues it. `submissions_without_copy` in the admin summary counts it | `runCopyJob` treats "no `drive_file_id`" as permanent |
 | Overlapping copy runs (lease reclaim) and copy-then-DB-failure both copy twice | An unreferenced duplicate in the event folder | `runCopyJob` |
 | Copy finishing after its submission was deleted | An unreferenced copy in the event folder | `runCopyJob`, `DELETE /v1/event-song-submissions/:id` |
 | Background build fails after the song was submitted or checked in | Song row stays with null Drive fields | `songs.ts` cleanup delete blocked by foreign keys |

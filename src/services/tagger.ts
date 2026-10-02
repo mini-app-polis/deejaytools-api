@@ -109,7 +109,14 @@ function readRiffChunks(bytes: Buffer): RiffChunk[] {
   while (pos + 8 <= bytes.length) {
     const id = bytes.subarray(pos, pos + 4).toString("latin1");
     const size = bytes.readUInt32LE(pos + 4);
-    if (pos + 8 + size > bytes.length) break;
+    if (pos + 8 + size > bytes.length) {
+      // The header claims more than the file holds: a truncated file, or a
+      // streaming writer that left the size at 0xFFFFFFFF. Keep what is there
+      // rather than dropping it — for a data chunk that is the audio itself.
+      // The chunk is re-written with its real length.
+      chunks.push({ id, payload: bytes.subarray(pos + 8) });
+      break;
+    }
     chunks.push({ id, payload: bytes.subarray(pos + 8, pos + 8 + size) });
     pos += 8 + size + (size & 1);
   }

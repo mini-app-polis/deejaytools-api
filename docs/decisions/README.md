@@ -41,3 +41,7 @@ What becomes easier or more difficult to do because of this change?
 - [ADR-003 — Clerk verification: session JWTs only, no M2M](./ADR-003-jwt-only-clerk-verification.md)
 - [ADR-004 — Floor-trial queue model](./ADR-004-floor-trial-queue-model.md) — superseded by ADR-005
 - [ADR-005 — Floor-trial queue model, as built](./ADR-005-floor-trial-queue-model-as-built.md)
+- [ADR-006 — Replacement API: a FastAPI service on the existing database](./ADR-006-replacement-api-fastapi-on-existing-database.md)
+- [ADR-007 — Replacement API: authorization through the identity library](./ADR-007-replacement-api-identity-authorization.md)
+- [ADR-008 — Replacement API: numbered raw-SQL migrations from a baseline](./ADR-008-replacement-api-raw-sql-migrations.md)
+- [ADR-009 — Replacement API: wire contract, reuse, and how it is tested](./ADR-009-replacement-api-contract-and-testing.md)
